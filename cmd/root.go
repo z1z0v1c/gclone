@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var rootCmd = &cobra.Command{
+var gocker = &cobra.Command{
 	Use:   "gocker",
 	Short: "My own version of Docker",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -15,8 +15,20 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+var run = &cobra.Command{
+  Use: "run",
+  Short: "Equivalent to Docker run subcommand",
+  Run: func(cmd *cobra.Command, args []string) {
+    fmt.Println("Run subcommand is called.")
+  },  
+}
+
+func init() {
+  gocker.AddCommand(run)
+}
+
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+	if err := gocker.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
