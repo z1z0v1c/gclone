@@ -15,14 +15,6 @@ var gocker = &cobra.Command{
 	},
 }
 
-var run = &cobra.Command{
-  Use: "run",
-  Short: "Equivalent to Docker run subcommand",
-  Run: func(cmd *cobra.Command, args []string) {
-    fmt.Println("Run subcommand is called.")
-  },  
-}
-
 func init() {
   gocker.AddCommand(run)
 }
