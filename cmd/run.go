@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"log"
 	"os"
 	"os/exec"
+	"syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -28,15 +30,25 @@ func Run(c *cobra.Command, args []string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
+	// Set SysProcAttr to use a new UTS namespace
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags: syscall.CLONE_NEWUTS,
+	}
+
+	// Set hostname
+	if err := syscall.Sethostname([]byte("container")); err != nil {
+		log.Fatalf("Set hostname: %v", err)
+	}
+
 	// Execute command
 	err := cmd.Run()
 	if err != nil {
-		// Inspect the exit code if it's an ExitError 
+		// Inspect the exit code if it's an ExitError
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			os.Exit(exitErr.ExitCode())
 		} else {
 			// Other kind of error
-			os.Exit(1)
+			log.Fatalln(err)
 		}
 	}
 }
