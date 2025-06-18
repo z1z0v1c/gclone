@@ -35,7 +35,7 @@ func Run(c *cobra.Command, args []string) {
 		Cloneflags: syscall.CLONE_NEWUTS,
 	}
 
-	// Set hostname
+	// Hardcode hostname
 	if err := syscall.Sethostname([]byte("container")); err != nil {
 		log.Fatalf("Set hostname: %v", err)
 	}
