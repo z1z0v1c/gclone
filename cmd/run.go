@@ -18,37 +18,58 @@ var run = &cobra.Command{
 }
 
 func Run(c *cobra.Command, args []string) {
-	// Extract the subcommand and its flags
-	subcmd := args[0]
-	flags := args[1:]
+	if os.Getenv("IS_CHILD") == "1" {
+		// Set the hostname
+		if err := syscall.Sethostname([]byte("container")); err != nil {
+			log.Fatalf("Set hostname: %v", err)
+		}
 
-	// Create the command
-	cmd := exec.Command(subcmd, flags...)
+		// Extract the subcommand and its flags
+		subcmd := args[0]
+		flags := args[1:]
+
+		// Create the command
+		cmd := exec.Command(subcmd, flags...)
+
+		// Forward all standard streams exactly as they are
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		// Execute command
+		if err := cmd.Run(); err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				os.Exit(exitErr.ExitCode())
+			} else {
+				log.Fatalf("Error: %v", err)
+			}
+		}
+
+		return
+	}
+
+	// Recreate the command for the child process
+	cmd := exec.Command("/proc/self/exe", os.Args[1:]...)
+
+	// Set IS_CHILD environment variable
+	cmd.Env = append(os.Environ(), "IS_CHILD=1")
 
 	// Forward all standard streams exactly as they are
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// Set SysProcAttr to use a new UTS namespace
+	// Use a new UTS namespace
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Cloneflags: syscall.CLONE_NEWUTS,
 	}
 
-	// Hardcode hostname
-	if err := syscall.Sethostname([]byte("container")); err != nil {
-		log.Fatalf("Set hostname: %v", err)
-	}
-
-	// Execute command
-	err := cmd.Run()
-	if err != nil {
-		// Inspect the exit code if it's an ExitError
+	// Re-execute command
+	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			os.Exit(exitErr.ExitCode())
 		} else {
-			// Other kind of error
-			log.Fatalln(err)
+			log.Fatalf("Error: %v", err)
 		}
 	}
 }
