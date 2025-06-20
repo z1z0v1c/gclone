@@ -78,7 +78,7 @@ func TestExitCodes(t *testing.T) {
 		},
 		{
 			name:         "ls nonexistent file",
-			args:         []string{"run", "ls", "nonexistent-file"},
+			args:         []string{"run", "ls", "nonexistent_file"},
 			expectedCode: 2, // ls typically returns 2 for "no such file"
 		},
 	}
