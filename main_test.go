@@ -58,3 +58,48 @@ func TestCommandExecution(t *testing.T) {
 		})
 	}
 }
+
+// TestExitCodes verifies that exit codes are properly propagated
+func TestExitCodes(t *testing.T) {
+	tests := []struct {
+		name         string
+		args         []string
+		expectedCode int
+	}{
+		{
+			name:         "successful command",
+			args:         []string{"run", "true"},
+			expectedCode: 0,
+		},
+		{
+			name:         "failing command",
+			args:         []string{"run", "false"},
+			expectedCode: 1,
+		},
+		{
+			name:         "ls nonexistent file",
+			args:         []string{"run", "ls", "nonexistent-file"},
+			expectedCode: 2, // ls typically returns 2 for "no such file"
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := exec.Command("./gocker", tt.args...)
+			err := cmd.Run()
+
+			var exitCode int
+			if err != nil {
+				if exitErr, ok := err.(*exec.ExitError); ok {
+					exitCode = exitErr.ExitCode()
+				} else {
+					t.Fatalf("Unexpected error type: %v", err)
+				}
+			}
+
+			if exitCode != tt.expectedCode {
+				t.Errorf("Expected exit code %d, got %d", tt.expectedCode, exitCode)
+			}
+		})
+	}
+}
