@@ -1,11 +1,13 @@
 package main
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
 )
 
+// TestCommandExecution tests that commands run and return correct output
 func TestCommandExecution(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -100,5 +102,41 @@ func TestExitCodes(t *testing.T) {
 				t.Errorf("Expected exit code %d, got %d", tt.expectedCode, exitCode)
 			}
 		})
+	}
+}
+
+// TestNamespaceIsolation tests that UTS namespace is properly isolated
+func TestNamespaceIsolation(t *testing.T) {
+	// Skip test if not running as root (required for namespaces)
+	if os.Geteuid() != 0 {
+		t.Skip("Skipping namespace test (requires root privileges)")
+	}
+
+	// Get original hostname
+	originalHostname, err := os.Hostname()
+	if err != nil {
+		t.Fatalf("Failed to get original hostname: %v", err)
+	}
+
+	// Test that container has different hostname
+	cmd := exec.Command("go", "run", "main.go", "run", "hostname")
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to run container: %v", err)
+	}
+
+	containerHostname := strings.TrimSpace(string(output))
+	if containerHostname != "container" {
+		t.Errorf("Expected container hostname 'container', got %q", containerHostname)
+	}
+
+	// Verify host hostname unchanged
+	currentHostname, err := os.Hostname()
+	if err != nil {
+		t.Fatalf("Failed to get current hostname: %v", err)
+	}
+
+	if currentHostname != originalHostname {
+		t.Errorf("Host hostname changed from %q to %q", originalHostname, currentHostname)
 	}
 }
