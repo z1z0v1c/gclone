@@ -39,19 +39,17 @@ func TestCommandExecution(t *testing.T) {
 
 			if tt.expectedError {
 				if err == nil {
-					t.Errorf("Expected error but got none")
+					t.Errorf("No expected error.")
 				}
-
 				return
 			}
 
 			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-
+				t.Errorf("Unexpected error: %v.", err)
 				return
 			}
 
-			// Check suffix for pwd command (also enough for echo)
+			// Check only the suffix for the pwd command (also enough for echo)
 			if !strings.HasSuffix(string(output), tt.expectedOutput) {
 				t.Errorf("Expected output %q, got %q", tt.expectedOutput, string(output))
 			}
@@ -79,12 +77,13 @@ func TestExitCodes(t *testing.T) {
 		{
 			name:         "ls nonexistent file",
 			args:         []string{"run", "ls", "nonexistent_file"},
-			expectedCode: 2, // ls typically returns 2 for "no such file"
+			expectedCode: 2, // "No such file or directory"
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Needs a compiled binary for proper error propagation
 			cmd := exec.Command("./gocker", tt.args...)
 			err := cmd.Run()
 

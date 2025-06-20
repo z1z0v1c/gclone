@@ -18,8 +18,7 @@ jobs:
       with:
         go-version: '1.24'
 
-    - name: Build
-      run: go build -v ./...
-
-    - name: Test
-      run: go build & sudo go test -v ./...
+    # Build and Test in one step
+    # Tests need compiled binary
+    - name: Build and Test
+      run: go build -v & sudo go test -v
