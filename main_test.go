@@ -24,7 +24,7 @@ func TestCommandExecution(t *testing.T) {
 		{
 			name:           "pwd command",
 			args:           []string{"run", "pwd"},
-			expectedOutput: "gocker\n",
+			expectedOutput: "/\n",
 			expectedError:  false,
 		},
 		{
@@ -51,8 +51,7 @@ func TestCommandExecution(t *testing.T) {
 				return
 			}
 
-			// Check only the suffix for the pwd command (also enough for echo)
-			if !strings.HasSuffix(string(output), tt.expectedOutput) {
+			if string(output) != tt.expectedOutput {
 				t.Errorf("Expected output %q, got %q", tt.expectedOutput, string(output))
 			}
 		})

@@ -41,6 +41,15 @@ func Run(c *cobra.Command, args []string) {
 			log.Fatalf("Change dir: %v", err)
 		}
 
+		if err := os.MkdirAll("/proc", 0555); err != nil {
+			log.Fatalf("Change dir: %v", err)
+		}
+
+		// Mount /proc inside new root
+		if err := syscall.Mount("proc", "/proc", "proc", 0, ""); err != nil {
+			log.Fatalf("Mount proc: %v", err)
+		}
+
 		// Extract the subcommand and its flags
 		subcmd := args[0]
 		flags := args[1:]
