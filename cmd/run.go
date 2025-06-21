@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const rootfs = "./alpine"
+
 var run = &cobra.Command{
 	Use:                "run [command]",
 	Short:              "Execute any Linux command",
@@ -22,6 +24,21 @@ func Run(c *cobra.Command, args []string) {
 		// Set the hostname
 		if err := syscall.Sethostname([]byte("container")); err != nil {
 			log.Fatalf("Set hostname: %v", err)
+		}
+
+		// Change to Alpine root directory
+		if err := os.Chdir(rootfs); err != nil {
+			log.Fatalf("Change dir: %v", err)
+		}
+
+		// Change root filesystem
+		if err := syscall.Chroot("."); err != nil {
+			log.Fatalf("Change root: %v", err)
+		}
+
+		// Change to root directory in the new filesystem
+		if err := os.Chdir("/"); err != nil {
+			log.Fatalf("Change dir: %v", err)
 		}
 
 		// Extract the subcommand and its flags
