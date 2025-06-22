@@ -21,6 +21,11 @@ var run = &cobra.Command{
 
 func Run(c *cobra.Command, args []string) {
 	if os.Getenv("IS_CHILD") == "1" {
+		// Unshare the mount namespace to isolate mounts from host
+		if err := syscall.Unshare(syscall.CLONE_NEWNS); err != nil {
+			log.Fatalf("Unshare mount namespace: %v", err)
+		}
+
 		// Set the hostname
 		if err := syscall.Sethostname([]byte("container")); err != nil {
 			log.Fatalf("Set hostname: %v", err)
@@ -64,6 +69,9 @@ func Run(c *cobra.Command, args []string) {
 
 		// Execute command
 		if err := cmd.Run(); err != nil {
+			// Clean up before exit
+			syscall.Unmount("/proc", 0)
+			
 			if exitErr, ok := err.(*exec.ExitError); ok {
 				os.Exit(exitErr.ExitCode())
 			} else {
@@ -92,7 +100,7 @@ func Run(c *cobra.Command, args []string) {
 
 	// Use a new UTS namespace
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWUTS,
+		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS,
 	}
 
 	// Re-execute command
