@@ -26,6 +26,11 @@ func Run(c *cobra.Command, args []string) {
 			log.Fatalf("Unshare mount namespace: %v", err)
 		}
 
+		// Make all mounts private to prevent mount propagation to parent namespace
+		if err := syscall.Mount("", "/", "", syscall.MS_PRIVATE|syscall.MS_REC, ""); err != nil {
+			log.Fatalf("Make mounts private: %v", err)
+		}
+
 		// Set the hostname
 		if err := syscall.Sethostname([]byte("container")); err != nil {
 			log.Fatalf("Set hostname: %v", err)
@@ -71,7 +76,7 @@ func Run(c *cobra.Command, args []string) {
 		if err := cmd.Run(); err != nil {
 			// Clean up before exit
 			syscall.Unmount("/proc", 0)
-			
+
 			if exitErr, ok := err.(*exec.ExitError); ok {
 				os.Exit(exitErr.ExitCode())
 			} else {
@@ -98,9 +103,10 @@ func Run(c *cobra.Command, args []string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// Use a new UTS namespace
+	// Use a new UTS. PID and Mount namespaces
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS,
+		Cloneflags:   syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS,
+		Unshareflags: syscall.CLONE_NEWNS,
 	}
 
 	// Re-execute command
