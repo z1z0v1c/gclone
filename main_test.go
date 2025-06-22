@@ -252,3 +252,53 @@ func TestChrootPreventsEscape(t *testing.T) {
 
 	t.Logf("Chroot escape test output: %s", string(output))
 }
+
+// TestFilesystemWriteIsolation tests that writes in container don't affect host
+func TestFilesystemWriteIsolation(t *testing.T) {
+	containerTestFile := "/tmp/container_test_file"
+
+	// Create tmp dir
+	cmd := exec.Command("./gocker", "run", "mkdir", "tmp")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to create tmp dir: %v", err)
+	}
+
+	// Create a test file in the container
+	cmd = exec.Command("./gocker", "run", "/bin/busybox", "sh", "-c",
+		fmt.Sprintf("touch %s", containerTestFile))
+
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to create file in container: %v", err)
+	}
+
+	// Write to the test file
+	testContent := "container test content"
+	cmd = exec.Command("./gocker", "run", "/bin/busybox", "sh", "-c",
+		fmt.Sprintf("echo '%s' > %s", testContent, containerTestFile))
+
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to write file in container: %v", err)
+	}
+
+	// Verify the file exists in the container
+	cmd = exec.Command("./gocker", "run", "/bin/busybox", "cat", containerTestFile)
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to read file from container: %v", err)
+	}
+
+	if !strings.Contains(string(output), testContent) {
+		t.Errorf("Container file content mismatch. Expected: %s, Got: %s", testContent, string(output))
+	}
+
+	// Verify the file doesn't exist on the host at /tmp/container_test_file
+	if _, err := os.Stat(containerTestFile); err == nil {
+		t.Error("Container file leaked to host filesystem")
+	}
+
+	// Remove tmp dir
+	cmd = exec.Command("./gocker", "run", "rm", "-r", "tmp")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to remove test file: %v", err)
+	}
+}
