@@ -194,3 +194,33 @@ func TestFilesystemIsolation(t *testing.T) {
 		t.Logf("Expected 'No such file' error, got: %s", string(output))
 	}
 }
+
+// TestContainerRootFilesystem tests that container sees Alpine filesystem as root
+func TestContainerRootFilesystem(t *testing.T) {
+	// List root directory contents
+	cmd := exec.Command("./gocker", "run", "/bin/busybox", "ls", "/")
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to list container root directory: %v", err)
+	}
+
+	outputStr := string(output)
+
+	// Check for Alpine-specific files/directories
+	expectedItems := []string{"ROOT_FS", "bin", "etc", "lib", "usr", "var"}
+	for _, item := range expectedItems {
+		if !strings.Contains(outputStr, item) {
+			t.Errorf("Expected to find %s in container root, got: %s", item, outputStr)
+		}
+	}
+
+	// Check that we don't see host-specific directories
+	hostSpecificItems := []string{"boot", "lib64"}
+	for _, item := range hostSpecificItems {
+		if strings.Contains(outputStr, item) {
+			t.Logf("Warning: Found host-specific item %s in container root: %s", item, outputStr)
+		}
+	}
+
+	t.Logf("Container root directory contents: %s", outputStr)
+}
