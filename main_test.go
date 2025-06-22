@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestCommandExecution tests that commands run and return correct output
@@ -167,4 +169,28 @@ func TestAlpineFilesystemExists(t *testing.T) {
 	}
 
 	t.Logf("Alpine filesystem found at: %s", rootfs)
+}
+
+// TestFilesystemIsolation tests that the container can't access host files
+func TestFilesystemIsolation(t *testing.T) {
+	// Create a unique test file on the host
+	hostTestFile := "/tmp/host_test_file_" + fmt.Sprintf("%d", time.Now().UnixNano())
+	if err := os.WriteFile(hostTestFile, []byte("host content"), 0644); err != nil {
+		t.Fatalf("Failed to create host test file: %v", err)
+	}
+	defer os.Remove(hostTestFile)
+
+	// Try to access the host file from within the container
+	cmd := exec.Command("./gocker", "run", "/bin/busybox", "cat", hostTestFile)
+
+	// The command should fail because the file shouldn't be accessible
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Errorf("Container was able to access host file %s, output: %s", hostTestFile, string(output))
+	}
+
+	// The error should indicate file not found
+	if !strings.Contains(string(output), "No such file") {
+		t.Logf("Expected 'No such file' error, got: %s", string(output))
+	}
 }
