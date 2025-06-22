@@ -302,3 +302,32 @@ func TestFilesystemWriteIsolation(t *testing.T) {
 		t.Fatalf("Failed to remove test file: %v", err)
 	}
 }
+
+// TestProcessesIsolation tests that processes are properly isolated
+func TestProcessesIsolation(t *testing.T) {
+	cmd := exec.Command("./gocker", "run", "ps", "axf")
+
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to run ps in container: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+	// Count processes
+	processCount := 0
+	for i, line := range lines {
+		if i == 0 {
+			continue // Skip header
+		}
+		if strings.TrimSpace(line) != "" {
+			processCount++
+		}
+	}
+
+	// Should have very few processes (container init + command + maybe children)
+	if processCount > 5 {
+		t.Errorf("Too many processes in container (%d), isolation may not be working. Output:\n%s",
+			processCount, output)
+	}
+}
