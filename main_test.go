@@ -224,3 +224,31 @@ func TestContainerRootFilesystem(t *testing.T) {
 
 	t.Logf("Container root directory contents: %s", outputStr)
 }
+
+// TestChrootPreventsEscape tests that cd .. doesn't escape the container root
+func TestChrootPreventsEscape(t *testing.T) {
+	script := `
+		pwd
+		cd ..
+		pwd
+		cd ../../..
+		pwd
+	`
+
+	cmd := exec.Command("./gocker", "run", "/bin/busybox", "sh", "-c", script)
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to run chroot escape test: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+	// All pwd commands should return '/'
+	for i, line := range lines {
+		if line != "/" {
+			t.Errorf("Line %d: expected '/', got '%s'. Full output: %s", i+1, line, string(output))
+		}
+	}
+
+	t.Logf("Chroot escape test output: %s", string(output))
+}
