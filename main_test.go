@@ -144,7 +144,7 @@ func TestNamespaceIsolation(t *testing.T) {
 }
 
 // TestAlpineFilesystemExists verifies Alpine filesystem is set up correctly
-func TestAlpineFilesystemExists(t *testing.T) {
+func TestAlpineFileSystemExists(t *testing.T) {
 	rootfs := "alpine"
 
 	// Check that ROOT_FS marker exists
@@ -172,7 +172,11 @@ func TestAlpineFilesystemExists(t *testing.T) {
 }
 
 // TestFilesystemIsolation tests that the container can't access host files
-func TestFilesystemIsolation(t *testing.T) {
+func TestFileSystemIsolation(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("Skipping filesystem isolation test: requires root privileges")
+	}
+
 	// Create a unique test file on the host
 	hostTestFile := "/tmp/host_test_file_" + fmt.Sprintf("%d", time.Now().UnixNano())
 	if err := os.WriteFile(hostTestFile, []byte("host content"), 0644); err != nil {
@@ -196,7 +200,11 @@ func TestFilesystemIsolation(t *testing.T) {
 }
 
 // TestContainerRootFilesystem tests that container sees Alpine filesystem as root
-func TestContainerRootFilesystem(t *testing.T) {
+func TestContainerRootFileSystem(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("Skipping container root filesystem test: requires root privileges")
+	}
+
 	// List root directory contents
 	cmd := exec.Command("./gocker", "run", "/bin/busybox", "ls", "/")
 	output, err := cmd.Output()
@@ -227,6 +235,10 @@ func TestContainerRootFilesystem(t *testing.T) {
 
 // TestChrootPreventsEscape tests that cd .. doesn't escape the container root
 func TestChrootPreventsEscape(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("Skipping chroot escape test: requires root privileges")
+	}
+
 	script := `
 		pwd
 		cd ..
@@ -255,6 +267,10 @@ func TestChrootPreventsEscape(t *testing.T) {
 
 // TestFilesystemWriteIsolation tests that writes in container don't affect host
 func TestFilesystemWriteIsolation(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("Skipping filesystem write isolation test: requires root privileges")
+	}
+
 	containerTestFile := "/tmp/container_test_file"
 
 	// Create tmp dir
@@ -262,6 +278,13 @@ func TestFilesystemWriteIsolation(t *testing.T) {
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to create tmp dir: %v", err)
 	}
+	defer func() {
+		// Remove tmp dir
+		cmd = exec.Command("./gocker", "run", "rm", "-rf", "tmp")
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("Failed to remove test file: %v", err)
+		}
+	}()
 
 	// Create a test file in the container
 	cmd = exec.Command("./gocker", "run", "/bin/busybox", "sh", "-c",
@@ -295,16 +318,14 @@ func TestFilesystemWriteIsolation(t *testing.T) {
 	if _, err := os.Stat(containerTestFile); err == nil {
 		t.Error("Container file leaked to host filesystem")
 	}
-
-	// Remove tmp dir
-	cmd = exec.Command("./gocker", "run", "rm", "-r", "tmp")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to remove test file: %v", err)
-	}
 }
 
 // TestProcessesIsolation tests that processes are properly isolated
 func TestProcessesIsolation(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("Skipping processes isolation test: requires root privileges")
+	}
+
 	cmd := exec.Command("./gocker", "run", "ps", "axf")
 
 	output, err := cmd.Output()
