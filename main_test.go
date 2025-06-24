@@ -50,7 +50,7 @@ func TestCommandExecution(t *testing.T) {
 			}
 
 			if err != nil {
-				t.Errorf("Unexpected error: %v.", err)
+				t.Errorf("Unexpected error: %q.", err.Error())
 				return
 			}
 
