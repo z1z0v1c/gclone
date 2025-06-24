@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -59,11 +58,6 @@ func Run(c *cobra.Command, args []string) {
 		// Mount proc dir inside rootfs
 		if err := syscall.Mount("proc", "/proc", "proc", 0, ""); err != nil {
 			log.Fatalf("Mount proc dir: %v", err)
-		}
-
-		// Set up user namespace mappings
-		if err := setupUserNamespace(); err != nil {
-			log.Fatalf("Setup user namespace: %v", err)
 		}
 
 		// Extract the subcommand and its flags
@@ -130,32 +124,4 @@ func Run(c *cobra.Command, args []string) {
 			log.Fatalf("Error: %v", err)
 		}
 	}
-}
-
-// setupUserNamespace sets up the user namespace mappings
-func setupUserNamespace() error {
-	// Check if we're already in a user namespace by trying to read uid_map
-	if _, err := os.Stat("/proc/self/uid_map"); err != nil {
-		return fmt.Errorf("uid_map not found: %v", err)
-	}
-
-	// Read current mappings to verify they're set up
-	uidMapData, err := os.ReadFile("/proc/self/uid_map")
-	if err != nil {
-		return fmt.Errorf("read uid_map: %v", err)
-	}
-
-	gidMapData, err := os.ReadFile("/proc/self/gid_map")
-	if err != nil {
-		return fmt.Errorf("read gid_map: %v", err)
-	}
-
-	// If mappings are empty, the parent process should have set them up
-	if len(uidMapData) == 0 || len(gidMapData) == 0 {
-		return fmt.Errorf("user namespace mappings not set up properly")
-	}
-
-	// At this point, we should be able to become root in the container
-	// The kernel will handle the mapping between container root (0) and host user
-	return nil
 }
