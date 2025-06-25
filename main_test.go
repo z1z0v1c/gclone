@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -350,5 +352,108 @@ func TestProcessesIsolation(t *testing.T) {
 	if processCount > 5 {
 		t.Errorf("Too many processes in container (%d), isolation may not be working. Output:\n%s",
 			processCount, output)
+	}
+}
+
+// TestUserNamespaceIsolation tests that the container runs without root privileges on the host
+func TestUserNamespaceIsolation(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("Skipping User namespace isolation test: requires non-root privileges")
+	}
+
+	// Get current host user info
+	currentUser, err := user.Current()
+	if err != nil {
+		t.Fatalf("Failed to get current user: %v", err)
+	}
+
+	hostUID, err := strconv.Atoi(currentUser.Uid)
+	if err != nil {
+		t.Fatalf("Failed to parse host UID: %v", err)
+	}
+
+	hostGID, err := strconv.Atoi(currentUser.Gid)
+	if err != nil {
+		t.Fatalf("Failed to parse host GID: %v", err)
+	}
+
+	t.Logf("Host user: %s (UID: %d, GID: %d)", currentUser.Username, hostUID, hostGID)
+
+	// Start a long-running process in the container
+	cmd := exec.Command("./gocker", "run", "sleep", "30")
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start container: %v", err)
+	}
+
+	// Give the container time to start
+	time.Sleep(2 * time.Second)
+
+	// Find the sleep process on the host
+	psCmd := exec.Command("ps", "-eo", "pid,uid,gid,user,command")
+	output, err := psCmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to run ps command: %v", err)
+	}
+
+	// Parse ps output to find our sleep process
+	lines := strings.Split(string(output), "\n")
+	var sleepPID int
+	var sleepUID, sleepGID int
+	var sleepUser string
+
+	for _, line := range lines {
+		if strings.Contains(line, "sleep 30") {
+			fields := strings.Fields(line)
+			if len(fields) >= 5 {
+				sleepPID, _ = strconv.Atoi(fields[0])
+				sleepUID, _ = strconv.Atoi(fields[1])
+				sleepGID, _ = strconv.Atoi(fields[2])
+				sleepUser = fields[3]
+				break
+			}
+		}
+	}
+
+	// Clean up the container process
+	defer func() {
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+			cmd.Wait()
+		}
+	}()
+
+	if sleepPID == 0 {
+		t.Fatal("Could not find sleep process in host process list")
+	}
+
+	t.Logf("Container sleep process: PID=%d, UID=%d, GID=%d, User=%s", sleepPID, sleepUID, sleepGID, sleepUser)
+
+	// Test 1: The process should NOT be running as root (UID 0) on the host
+	if sleepUID == 0 {
+		t.Error("FAIL: Container process is running as root (UID 0) on the host - user namespace isolation not working")
+	} else {
+		t.Logf("PASS: Container process is not running as root on the host (UID: %d)", sleepUID)
+	}
+
+	// Test 2: The process should be running as the host user (user namespace mapping)
+	if sleepUID != hostUID {
+		t.Errorf("FAIL: Expected container process to run as host user UID %d, but got UID %d", hostUID, sleepUID)
+	} else {
+		t.Logf("PASS: Container process is running as expected host user (UID: %d)", sleepUID)
+	}
+
+	// Test 3: The process should be running with the host user's GID
+	if sleepGID != hostGID {
+		t.Errorf("FAIL: Expected container process to run with host GID %d, but got GID %d", hostGID, sleepGID)
+	} else {
+		t.Logf("PASS: Container process is running with expected host GID (%d)", sleepGID)
+	}
+
+	// Test 4: The username should match the host user
+	if sleepUser != currentUser.Username {
+		t.Errorf("FAIL: Expected container process to run as user '%s', but got '%s'", currentUser.Username, sleepUser)
+	} else {
+		t.Logf("PASS: Container process is running as expected user (%s)", sleepUser)
 	}
 }
