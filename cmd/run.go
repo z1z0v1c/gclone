@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -92,6 +95,9 @@ func Run(c *cobra.Command, args []string) {
 		return
 	}
 
+	setupCgroups()
+	defer cleanupCgroups()
+
 	// Recreate the command for the child process
 	cmd := exec.Command("/proc/self/exe", os.Args[1:]...)
 
@@ -123,5 +129,52 @@ func Run(c *cobra.Command, args []string) {
 		} else {
 			log.Fatalf("Error: %v", err)
 		}
+	}
+}
+
+func setupCgroups() {
+	cgroupRoot := "/sys/fs/cgroup"
+	cgroupName := fmt.Sprintf("gocker%d", os.Getpid())
+	cgroupPath := filepath.Join(cgroupRoot, cgroupName)
+
+	if err := os.MkdirAll(cgroupPath, 0755); err != nil {
+		log.Fatalf("Failed to create cgroup v2 path: %v", err)
+	}
+
+	// Set memory limit in bytes
+	if err := os.WriteFile(filepath.Join(cgroupPath, "memory.max"), []byte("50M"), 0644); err != nil {
+		log.Fatalf("Failed to set memory limit: %v", err)
+	}
+
+	// Set CPU limit (20%)
+	// Format: "<max> <period>" where max and period are in microseconds
+	if err := os.WriteFile(filepath.Join(cgroupPath, "cpu.max"), []byte("20000 100000"), 0644); err != nil {
+		log.Fatalf("Failed to set CPU limit: %v", err)
+	}
+
+	// Add current process to the cgroup
+	if err := os.WriteFile(filepath.Join(cgroupPath, "cgroup.procs"),
+		[]byte(strconv.Itoa(os.Getpid())), 0644); err != nil {
+		log.Fatalf("Failed to add process to cgroup: %v", err)
+	}
+}
+
+func cleanupCgroups() {
+	cgroupRoot := "/sys/fs/cgroup"
+	cgroupName := fmt.Sprintf("gocker%d", os.Getpid())
+	cgroupPath := filepath.Join(cgroupRoot, cgroupName)
+
+	// Move the current process back to the root cgroup
+	rootProcs := filepath.Join(cgroupRoot, "cgroup.procs")
+	selfPid := []byte(strconv.Itoa(os.Getpid()))
+
+	if err := os.WriteFile(rootProcs, selfPid, 0644); err != nil {
+		log.Printf("Warning: Failed to move process out of cgroup: %v", err)
+		return
+	}
+
+	// Now it's safe to remove the cgroup directory
+	if err := os.RemoveAll(cgroupPath); err != nil {
+		log.Printf("Warning: Failed to remove cgroup directory: %v", err)
 	}
 }
