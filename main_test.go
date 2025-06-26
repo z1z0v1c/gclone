@@ -465,3 +465,25 @@ func TestMemoryLimit(t *testing.T) {
 		t.Error("Expected memory limit to kill the process, but it ran successfully")
 	}
 }
+
+func TestCPULimit(t *testing.T) {
+	start := time.Now()
+
+	cmd := exec.Command("./gocker", "run", "sh", "-c", `
+		i=0; while [ $i -lt 100000 ]; do :; i=$((i+1)); done
+	`)
+	err := cmd.Run()
+
+	duration := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("CPU-bound task failed: %v", err)
+	}
+
+	t.Logf("CPU-bound task duration: %v", duration)
+
+	// Expect this to take longer if CPU limit is enforced
+	if duration < 2*time.Second {
+		t.Error("CPU limit may not be enforced: task finished too quickly")
+	}
+}
