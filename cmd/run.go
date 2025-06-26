@@ -124,6 +124,8 @@ func Run(c *cobra.Command, args []string) {
 
 	// Re-execute command
 	if err := cmd.Run(); err != nil {
+		cleanupCgroups() // os.Exit skips deferd calls
+
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			os.Exit(exitErr.ExitCode())
 		} else {
