@@ -457,3 +457,11 @@ func TestUserNamespaceIsolation(t *testing.T) {
 		t.Logf("PASS: Container process is running as expected user (%s)", sleepUser)
 	}
 }
+
+func TestMemoryLimit(t *testing.T) {
+	cmd := exec.Command("./gocker", "run", "sh", "-c", "dd if=/dev/zero of=/dev/null bs=1M count=1000")
+	err := cmd.Run()
+	if err == nil {
+		t.Error("Expected memory limit to kill the process, but it ran successfully")
+	}
+}
