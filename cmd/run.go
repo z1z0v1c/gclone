@@ -62,6 +62,7 @@ func Run(c *cobra.Command, args []string) {
 		if err := syscall.Mount("proc", "/proc", "proc", 0, ""); err != nil {
 			log.Fatalf("Mount proc dir: %v", err)
 		}
+		defer syscall.Unmount("/proc", 0)
 
 		// Extract the subcommand and its flags
 		subcmd := args[0]
@@ -85,11 +86,6 @@ func Run(c *cobra.Command, args []string) {
 			} else {
 				log.Fatalf("Error: %v", err)
 			}
-		}
-
-		// Clean up
-		if err := syscall.Unmount("/proc", 0); err != nil {
-			log.Fatalf("Unmount proc: %v", err)
 		}
 
 		return
