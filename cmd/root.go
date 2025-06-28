@@ -16,7 +16,7 @@ var gocker = &cobra.Command{
 }
 
 func init() {
-	gocker.AddCommand(run)
+	gocker.AddCommand(run, pull)
 }
 
 func Execute() {
