@@ -55,6 +55,61 @@ type AuthResponse struct {
 	Token string `json:"token"`
 }
 
+type ImageConfig struct {
+	Architecture string `json:"architecture"`
+	Config       struct {
+		Hostname     string              `json:"Hostname"`
+		Domainname   string              `json:"Domainname"`
+		User         string              `json:"User"`
+		AttachStdin  bool                `json:"AttachStdin"`
+		AttachStdout bool                `json:"AttachStdout"`
+		AttachStderr bool                `json:"AttachStderr"`
+		Tty          bool                `json:"Tty"`
+		OpenStdin    bool                `json:"OpenStdin"`
+		StdinOnce    bool                `json:"StdinOnce"`
+		Env          []string            `json:"Env"`
+		Cmd          []string            `json:"Cmd"`
+		Image        string              `json:"Image"`
+		Volumes      map[string]struct{} `json:"Volumes"`
+		WorkingDir   string              `json:"WorkingDir"`
+		Entrypoint   []string            `json:"Entrypoint"`
+		OnBuild      []string            `json:"OnBuild"`
+		Labels       map[string]string   `json:"Labels"`
+	} `json:"config"`
+	Container       string `json:"container"`
+	ContainerConfig struct {
+		Hostname     string              `json:"Hostname"`
+		Domainname   string              `json:"Domainname"`
+		User         string              `json:"User"`
+		AttachStdin  bool                `json:"AttachStdin"`
+		AttachStdout bool                `json:"AttachStdout"`
+		AttachStderr bool                `json:"AttachStderr"`
+		Tty          bool                `json:"Tty"`
+		OpenStdin    bool                `json:"OpenStdin"`
+		StdinOnce    bool                `json:"StdinOnce"`
+		Env          []string            `json:"Env"`
+		Cmd          []string            `json:"Cmd"`
+		Image        string              `json:"Image"`
+		Volumes      map[string]struct{} `json:"Volumes"`
+		WorkingDir   string              `json:"WorkingDir"`
+		Entrypoint   []string            `json:"Entrypoint"`
+		OnBuild      []string            `json:"OnBuild"`
+		Labels       map[string]string   `json:"Labels"`
+	} `json:"container_config"`
+	Created       string `json:"created"`
+	DockerVersion string `json:"docker_version"`
+	History       []struct {
+		Created    string `json:"created"`
+		CreatedBy  string `json:"created_by"`
+		EmptyLayer bool   `json:"empty_layer,omitempty"`
+	} `json:"history"`
+	Os     string `json:"os"`
+	Rootfs struct {
+		Type    string   `json:"type"`
+		DiffIds []string `json:"diff_ids"`
+	} `json:"rootfs"`
+}
+
 var pull = &cobra.Command{
 	Use:                "pull",
 	Short:              "Pull an image from Docker Hub",
@@ -98,6 +153,25 @@ func Pull(c *cobra.Command, args []string) {
 			log.Fatalf("failed to download layer %s: %v", layer.Digest, err)
 		}
 	}
+
+	fmt.Printf("Downloading config: %s\n", manifest.Config.Digest)
+	config, err := fetchConfig(registry, repository, manifest.Config.Digest, token)
+	if err != nil {
+		log.Fatalf("failed to fetch config: %v", err)
+	}
+
+	// Store config for Step 8
+	configPath := filepath.Join(image, ".config.json")
+	configData, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		log.Fatalf("failed to marshal config: %v", err)
+	}
+
+	if err := os.WriteFile(configPath, configData, 0644); err != nil {
+		log.Fatalf("failed to write config: %v", err)
+	}
+
+	fmt.Printf("Image %s pulled successfully\n", image)
 }
 
 func authenticate(repository string) (string, error) {
@@ -308,4 +382,33 @@ func downloadAndExtractLayer(root, registry, repository, digest, token string) e
 	}
 
 	return nil
+}
+
+func fetchConfig(registry, repository, digest, token string) (*ImageConfig, error) {
+	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, digest)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch config with status: %d", resp.StatusCode)
+	}
+
+	var config ImageConfig
+	if err := json.NewDecoder(resp.Body).Decode(&config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
 }
