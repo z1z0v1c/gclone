@@ -10,10 +10,38 @@ import (
 )
 
 const (
-	registry = "registry-1.docker.io."
+	registry = "registry-1.docker.io"
 	tag      = "latest"
 	auth     = "https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull"
 )
+
+type Manifest struct {
+	SchemaVersion int    `json:"schemaVersion"`
+	MediaType     string `json:"mediaType"`
+	Config        struct {
+		MediaType string `json:"mediaType"`
+		Size      int    `json:"size"`
+		Digest    string `json:"digest"`
+	} `json:"config"`
+	Layers []struct {
+		MediaType string `json:"mediaType"`
+		Size      int    `json:"size"`
+		Digest    string `json:"digest"`
+	} `json:"layers"`
+}
+
+type ManifestIndex struct {
+	SchemaVersion int    `json:"schemaVersion"`
+	MediaType     string `json:"mediaType"`
+	Manifests     []struct {
+		MediaType string `json:"mediaType"`
+		Digest    string `json:"digest"`
+		Platform  struct {
+			Architecture string `json:"architecture"`
+			OS           string `json:"os"`
+		} `json:"platform"`
+	} `json:"manifests"`
+}
 
 type AuthResponse struct {
 	Token string `json:"token"`
@@ -33,19 +61,24 @@ func Pull(c *cobra.Command, args []string) {
 
 	log.Printf("Pulling %q image from the %q repository in %q registry...", image, repository, registry)
 
-	log.Printf("Authenticating for the %q repository...", repository)
-
 	token, err := authenticate(repository)
 	if err != nil {
 		log.Fatalf("authentication failed: %v", err)
 	}
 
-	log.Printf("Token: %s", token)
+	manifest, err := fetchManifest(registry, repository, tag, token)
+	if err != nil {
+		log.Fatalf("failed to fetch manifest: %v", err)
+	}
+
+	log.Printf("Manifest: %v", manifest)
 }
 
 func authenticate(repository string) (string, error) {
 	// For Docker Hub, we need to get a token from auth.docker.io
 	authURL := fmt.Sprintf(auth, repository)
+
+	log.Printf("Authenticating with: %s\n", authURL)
 
 	resp, err := http.Get(authURL)
 	if err != nil {
@@ -62,5 +95,88 @@ func authenticate(repository string) (string, error) {
 		return "", err
 	}
 
+	log.Printf("Authentication successful, token length: %d\n", len(authResp.Token))
+
 	return authResp.Token, nil
+}
+
+func fetchManifest(registry, repository, tag, token string) (*Manifest, error) {
+	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, tag)
+
+	log.Printf("Fetching manifest from: %s\n", url)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+	req.Header.Set("User-Agent", "gocker/1.0")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch manifest with status: %d", resp.StatusCode)
+	}
+
+	ctype := resp.Header.Get("Content-Type")
+	// Handle OCI Index (manifest list)
+	if ctype == "application/vnd.oci.image.index.v1+json" || ctype == "application/vnd.docker.distribution.manifest.list.v2+json" {
+		var index ManifestIndex
+		if err := json.NewDecoder(resp.Body).Decode(&index); err != nil {
+			return nil, fmt.Errorf("error decoding manifest index: %w", err)
+		}
+		log.Printf("Received index, contains %d platform manifests", len(index.Manifests))
+
+		for _, m := range index.Manifests {
+			if m.Platform.OS == "linux" && m.Platform.Architecture == "amd64" {
+				log.Printf("Selected manifest digest for linux/amd64: %s", m.Digest)
+				return fetchManifestByDigest(repository, m.Digest, token)
+			}
+		}
+		return nil, fmt.Errorf("no matching platform found in manifest index")
+	}
+
+	var manifest Manifest
+	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
+		return nil, err
+	}
+
+	return &manifest, nil
+}
+
+func fetchManifestByDigest(repository, digest, token string) (*Manifest, error) {
+	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, digest)
+	log.Printf("Fetching platform-specific manifest: %s", url)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+	req.Header.Set("User-Agent", "gocker/1.0")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch manifest by digest, status: %d", resp.StatusCode)
+	}
+
+	var manifest Manifest
+	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
+		return nil, err
+	}
+	return &manifest, nil
 }
