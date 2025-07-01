@@ -22,7 +22,8 @@ var run = &cobra.Command{
 }
 
 func Run(c *cobra.Command, args []string) {
-	image := args[0]
+	// Extract the image name, subcommand and its flags
+	image, subcmd, argz := args[0], args[1], args[2:]
 
 	rootfs := filepath.Join("./", image)
 	configPath := filepath.Join("./", image, ".config.json")
@@ -97,10 +98,6 @@ func Run(c *cobra.Command, args []string) {
 			log.Fatalf("Mount proc dir: %v", err)
 		}
 		defer syscall.Unmount("/proc", 0)
-
-		// Extract the subcommand and its flags
-		subcmd := args[1]
-		argz := args[2:]
 
 		// Create the command
 		cmd := exec.Command(subcmd, argz...)
