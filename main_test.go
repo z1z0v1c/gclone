@@ -14,6 +14,10 @@ import (
 
 // TestCommandExecution tests that commands run and return correct output
 func TestCommandExecution(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("Skipping processes isolation test: requires root privileges")
+	}
+
 	tests := []struct {
 		name           string
 		args           []string
@@ -65,6 +69,10 @@ func TestCommandExecution(t *testing.T) {
 
 // TestExitCodes verifies that exit codes are properly propagated
 func TestExitCodes(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("Skipping processes isolation test: requires root privileges")
+	}
+
 	tests := []struct {
 		name         string
 		args         []string
@@ -380,7 +388,7 @@ func TestUserNamespaceIsolation(t *testing.T) {
 	t.Logf("Host user: %s (UID: %d, GID: %d)", currentUser.Username, hostUID, hostGID)
 
 	// Start a long-running process in the container
-	cmd := exec.Command("./gocker", "run", "sleep", "30")
+	cmd := exec.Command("./gocker", "run", "alpine", "sleep", "30")
 
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("Failed to start container: %v", err)
