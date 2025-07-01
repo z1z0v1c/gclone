@@ -21,13 +21,6 @@ var run = &cobra.Command{
 	Run:                Run,
 }
 
-type config struct {
-	ImageConfig struct {
-		Env        []string `json:"Env"`
-		WorkingDir string   `json:"WorkingDir"`
-	} `json:"config"`
-}
-
 func Run(c *cobra.Command, args []string) {
 	image := args[0]
 
@@ -40,8 +33,8 @@ func Run(c *cobra.Command, args []string) {
 	}
 	defer configFile.Close()
 
-	var config config
-	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+	var cfg ImageConfig
+	if err := json.NewDecoder(configFile).Decode(&cfg); err != nil {
 		log.Fatalf("Can't decode config file: %s", configPath)
 	}
 
@@ -55,9 +48,9 @@ func Run(c *cobra.Command, args []string) {
 	env = append(env, "SHELL=/bin/sh")
 	env = append(env, "TERM=xterm")
 
-	env = append(env, config.ImageConfig.Env...)
-	if config.ImageConfig.WorkingDir != "" {
-		workingDir = config.ImageConfig.WorkingDir
+	env = append(env, cfg.Config.Env...)
+	if cfg.Config.WorkingDir != "" {
+		workingDir = cfg.Config.WorkingDir
 	}
 
 	if os.Getenv("IS_CHILD") == "1" {
