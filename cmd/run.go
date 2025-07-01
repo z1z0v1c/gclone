@@ -12,11 +12,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const rootfs = "./alpine"
-
 var run = &cobra.Command{
-	Use:                "run [command]",
-	Short:              "Execute any Linux command",
+	Use:                "run [image] [command]",
+	Short:              "Run a container from a downloaded image",
 	DisableFlagParsing: true,
 	Args:               cobra.MinimumNArgs(1),
 	Run:                Run,
@@ -24,6 +22,8 @@ var run = &cobra.Command{
 
 func Run(c *cobra.Command, args []string) {
 	if os.Getenv("IS_CHILD") == "1" {
+		rootfs := os.Getenv("IMAGE")
+
 		// Unshare the mount namespace to isolate mounts from host
 		if err := syscall.Unshare(syscall.CLONE_NEWNS); err != nil {
 			log.Fatalf("Unshare mount namespace: %v", err)
@@ -66,10 +66,10 @@ func Run(c *cobra.Command, args []string) {
 
 		// Extract the subcommand and its flags
 		subcmd := args[0]
-		flags := args[1:]
+		argz := args[1:]
 
 		// Create the command
-		cmd := exec.Command(subcmd, flags...)
+		cmd := exec.Command(subcmd, argz...)
 
 		// Forward all standard streams exactly as they are
 		cmd.Stdin = os.Stdin
@@ -94,11 +94,14 @@ func Run(c *cobra.Command, args []string) {
 	setupCgroups()
 	defer cleanupCgroups()
 
+	image := os.Args[2]
+
 	// Recreate the command for the child process
-	cmd := exec.Command("/proc/self/exe", os.Args[1:]...)
+	argz := append(os.Args[1:2], os.Args[3:]...)
+	cmd := exec.Command("/proc/self/exe", argz...)
 
 	// Set IS_CHILD environment variable
-	cmd.Env = append(os.Environ(), "IS_CHILD=1")
+	cmd.Env = append(os.Environ(), "IS_CHILD=1", fmt.Sprintf("IMAGE=%s", image))
 
 	// Forward all standard streams exactly as they are
 	cmd.Stdin = os.Stdin

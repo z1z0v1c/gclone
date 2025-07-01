@@ -8,11 +8,8 @@ import (
 )
 
 var gocker = &cobra.Command{
-	Use:   "gocker",
+	Use:   "gocker [command]",
 	Short: "My own version of Docker",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Greetings from Gocker!")
-	},
 }
 
 func init() {
