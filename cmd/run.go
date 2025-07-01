@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -20,10 +21,46 @@ var run = &cobra.Command{
 	Run:                Run,
 }
 
-func Run(c *cobra.Command, args []string) {
-	if os.Getenv("IS_CHILD") == "1" {
-		rootfs := os.Getenv("IMAGE")
+type config struct {
+	ImageConfig struct {
+		Env        []string `json:"Env"`
+		WorkingDir string   `json:"WorkingDir"`
+	} `json:"config"`
+}
 
+func Run(c *cobra.Command, args []string) {
+	image := args[0]
+
+	rootfs := filepath.Join("./", image)
+	configPath := filepath.Join("./", image, ".config.json")
+
+	configFile, err := os.Open(configPath)
+	if err != nil {
+		log.Fatalf("Can't open config file: %s", configPath)
+	}
+	defer configFile.Close()
+
+	var config config
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		log.Fatalf("Can't decode config file: %s", configPath)
+	}
+
+	// Prepare clean container environment
+	var env []string
+	workingDir := "/"
+
+	// Set minimal required environment variables
+	env = append(env, "HOME=/root")
+	env = append(env, "USER=root")
+	env = append(env, "SHELL=/bin/sh")
+	env = append(env, "TERM=xterm")
+
+	env = append(env, config.ImageConfig.Env...)
+	if config.ImageConfig.WorkingDir != "" {
+		workingDir = config.ImageConfig.WorkingDir
+	}
+
+	if os.Getenv("IS_CHILD") == "1" {
 		// Unshare the mount namespace to isolate mounts from host
 		if err := syscall.Unshare(syscall.CLONE_NEWNS); err != nil {
 			log.Fatalf("Unshare mount namespace: %v", err)
@@ -54,6 +91,10 @@ func Run(c *cobra.Command, args []string) {
 			log.Fatalf("Change dir: %v", err)
 		}
 
+		if err := os.Chdir(workingDir); err != nil {
+			log.Printf("Warning: failed to chdir to workingDir: %v, staying in /", err)
+		}
+
 		if err := os.MkdirAll("/proc", 0555); err != nil {
 			log.Fatalf("Make proc dir: %v", err)
 		}
@@ -65,8 +106,8 @@ func Run(c *cobra.Command, args []string) {
 		defer syscall.Unmount("/proc", 0)
 
 		// Extract the subcommand and its flags
-		subcmd := args[0]
-		argz := args[1:]
+		subcmd := args[1]
+		argz := args[2:]
 
 		// Create the command
 		cmd := exec.Command(subcmd, argz...)
@@ -75,6 +116,9 @@ func Run(c *cobra.Command, args []string) {
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+
+		cmd.Env = env
+		cmd.Dir = workingDir
 
 		// Execute command
 		if err := cmd.Run(); err != nil {
@@ -94,14 +138,11 @@ func Run(c *cobra.Command, args []string) {
 	setupCgroups()
 	defer cleanupCgroups()
 
-	image := os.Args[2]
-
 	// Recreate the command for the child process
-	argz := append(os.Args[1:2], os.Args[3:]...)
-	cmd := exec.Command("/proc/self/exe", argz...)
+	cmd := exec.Command("/proc/self/exe", os.Args[1:]...)
 
 	// Set IS_CHILD environment variable
-	cmd.Env = append(os.Environ(), "IS_CHILD=1", fmt.Sprintf("IMAGE=%s", image))
+	cmd.Env = append(env, "IS_CHILD=1")
 
 	// Forward all standard streams exactly as they are
 	cmd.Stdin = os.Stdin
