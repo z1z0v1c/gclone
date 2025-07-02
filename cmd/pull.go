@@ -33,7 +33,8 @@ var pull = &cobra.Command{
 
 func Pull(c *cobra.Command, args []string) {
 	image := args[0]
-	repository := "library/" + image
+	repository := filepath.Join("library", image)
+	imagePath := filepath.Join(os.Getenv("HOME"), ".local/share/gocker/images/", image)
 
 	log.Printf("Pulling %q image from the %q repository in %q registry...", image, repository, registry)
 
@@ -52,17 +53,17 @@ func Pull(c *cobra.Command, args []string) {
 	log.Printf("Found %d layers to download\n", len(manifest.Layers))
 
 	// Create rootfs directory if it doesn't exist
-	if err := os.RemoveAll(image); err != nil {
+	if err := os.RemoveAll(imagePath); err != nil {
 		log.Fatalf("failed to remove existing rootfs: %v", err)
 	}
-	if err := os.MkdirAll(image, 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(imagePath, "rootfs"), 0755); err != nil {
 		log.Fatalf("failed to create rootfs directory: %v", err)
 	}
 
 	for i, layer := range manifest.Layers {
 		log.Printf("Downloading layer %d/%d: %s\n", i+1, len(manifest.Layers), layer.Digest)
 
-		if err := downloadAndExtractLayer(image, registry, repository, layer.Digest, token); err != nil {
+		if err := downloadAndExtractLayer(filepath.Join(imagePath, "rootfs"), registry, repository, layer.Digest, token); err != nil {
 			log.Fatalf("failed to download layer %s: %v", layer.Digest, err)
 		}
 	}
@@ -74,7 +75,7 @@ func Pull(c *cobra.Command, args []string) {
 	}
 
 	// Store config for Step 8
-	configPath := filepath.Join(image, ".config.json")
+	configPath := filepath.Join(imagePath, ".config.json")
 	configData, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		log.Fatalf("failed to marshal config: %v", err)
@@ -84,7 +85,7 @@ func Pull(c *cobra.Command, args []string) {
 		log.Fatalf("failed to write config: %v", err)
 	}
 
-	fmt.Printf("Image %s pulled successfully\n", image)
+	fmt.Printf("Image %q pulled successfully to %q\n", image, imagePath)
 }
 
 func authenticate(repository string) (string, error) {
@@ -194,7 +195,7 @@ func fetchManifestByDigest(repository, digest, token string) (*Manifest, error) 
 	return &manifest, nil
 }
 
-func downloadAndExtractLayer(root, registry, repository, digest, token string) error {
+func downloadAndExtractLayer(rootfs, registry, repository, digest, token string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, digest)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -239,10 +240,10 @@ func downloadAndExtractLayer(root, registry, repository, digest, token string) e
 			return fmt.Errorf("failed to read tar header: %w", err)
 		}
 
-		targetPath := filepath.Join(root, header.Name)
+		targetPath := filepath.Join(rootfs, header.Name)
 
 		// Security check: prevent path traversal
-		if !strings.HasPrefix(targetPath, root) {
+		if !strings.HasPrefix(targetPath, rootfs) {
 			continue
 		}
 
@@ -278,7 +279,7 @@ func downloadAndExtractLayer(root, registry, repository, digest, token string) e
 			}
 		case tar.TypeLink:
 			// Create hard link
-			linkTarget := filepath.Join(root, header.Linkname)
+			linkTarget := filepath.Join(rootfs, header.Linkname)
 			if err := os.Link(linkTarget, targetPath); err != nil {
 				// Ignore if link already exists
 				if !os.IsExist(err) {

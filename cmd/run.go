@@ -25,8 +25,8 @@ func Run(c *cobra.Command, args []string) {
 	// Extract the image name, subcommand and its flags
 	image, subcmd, argz := args[0], args[1], args[2:]
 
-	rootfs := filepath.Join("./", image)
-	configPath := filepath.Join("./", image, ".config.json")
+	rootfs := filepath.Join(os.Getenv("HOME"), ".local/share/gocker/images/", image, "rootfs")
+	configPath := filepath.Join(os.Getenv("HOME"), ".local/share/gocker/images/", image, ".config.json")
 
 	configFile, err := os.Open(configPath)
 	if err != nil {
