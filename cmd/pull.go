@@ -114,9 +114,7 @@ func fetchManifest(manifest *Manifest, token string) error {
 		return err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
-	req.Header.Set("User-Agent", "gocker/1.0")
+	setRequestHeaders(req, token)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -170,9 +168,7 @@ func fetchManifestByDigest(manifest *Manifest, digest, token string) error {
 		return err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
-	req.Header.Set("User-Agent", "gocker/1.0")
+	setRequestHeaders(req, token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -189,6 +185,12 @@ func fetchManifestByDigest(manifest *Manifest, digest, token string) error {
 	}
 
 	return nil
+}
+
+func setRequestHeaders(req *http.Request, token string) {
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+	req.Header.Set("User-Agent", "gocker/1.0")
 }
 
 func downloadAndExtractLayer(rootfs, digest, token string) error {
