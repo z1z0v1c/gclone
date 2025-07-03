@@ -53,37 +53,34 @@ func Pull(c *cobra.Command, args []string) {
 	log.Printf("Found %d layers to download\n", len(manifest.Layers))
 
 	// Create rootfs directory if it doesn't exist
-	if err := os.RemoveAll(imagePath); err != nil {
-		log.Fatalf("failed to remove existing rootfs: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Join(imagePath, "rootfs"), 0755); err != nil {
-		log.Fatalf("failed to create rootfs directory: %v", err)
-	}
+	must(os.RemoveAll(imagePath), "failed to remove existing rootfs")
+
+	must(os.MkdirAll(filepath.Join(imagePath, "rootfs"), 0755), "failed to create rootfs directory")
 
 	for i, layer := range manifest.Layers {
 		log.Printf("Downloading layer %d/%d: %s\n", i+1, len(manifest.Layers), layer.Digest)
 
-		if err := downloadAndExtractLayer(filepath.Join(imagePath, "rootfs"), registry, repository, layer.Digest, token); err != nil {
-			log.Fatalf("failed to download layer %s: %v", layer.Digest, err)
-		}
+		must(
+			downloadAndExtractLayer(filepath.Join(imagePath, "rootfs"), registry, repository, layer.Digest, token),
+			"failed to download layer",
+		)
 	}
 
 	fmt.Printf("Downloading config: %s\n", manifest.Config.Digest)
+
 	config, err := fetchConfig(registry, repository, manifest.Config.Digest, token)
 	if err != nil {
 		log.Fatalf("failed to fetch config: %v", err)
 	}
 
-	// Store config for Step 8
+	// Store config
 	configPath := filepath.Join(imagePath, ".config.json")
 	configData, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		log.Fatalf("failed to marshal config: %v", err)
 	}
 
-	if err := os.WriteFile(configPath, configData, 0644); err != nil {
-		log.Fatalf("failed to write config: %v", err)
-	}
+	must(os.WriteFile(configPath, configData, 0644), "failed to write config")
 
 	fmt.Printf("Image %q pulled successfully to %q\n", image, imagePath)
 }
@@ -192,6 +189,7 @@ func fetchManifestByDigest(repository, digest, token string) (*Manifest, error) 
 	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
 		return nil, err
 	}
+
 	return &manifest, nil
 }
 
@@ -223,7 +221,7 @@ func downloadAndExtractLayer(rootfs, registry, repository, digest, token string)
 	// Create gzip reader
 	gzipReader, err := gzip.NewReader(reader)
 	if err != nil {
-		return fmt.Errorf("failed to create gzip reader: %w", err)
+		return fmt.Errorf("failed to create gzip reader: %v", err)
 	}
 	defer gzipReader.Close()
 
@@ -237,7 +235,7 @@ func downloadAndExtractLayer(rootfs, registry, repository, digest, token string)
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("failed to read tar header: %w", err)
+			return fmt.Errorf("failed to read tar header: %v", err)
 		}
 
 		targetPath := filepath.Join(rootfs, header.Name)
@@ -250,23 +248,23 @@ func downloadAndExtractLayer(rootfs, registry, repository, digest, token string)
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(targetPath, os.FileMode(header.Mode)); err != nil {
-				return fmt.Errorf("failed to create directory %s: %w", targetPath, err)
+				return fmt.Errorf("failed to create directory %s: %v", targetPath, err)
 			}
 		case tar.TypeReg:
 			// Create directory for file if it doesn't exist
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-				return fmt.Errorf("failed to create parent directory for %s: %w", targetPath, err)
+				return fmt.Errorf("failed to create parent directory for %s: %v", targetPath, err)
 			}
 
 			// Create and write file
 			file, err := os.OpenFile(targetPath, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
-				return fmt.Errorf("failed to create file %s: %w", targetPath, err)
+				return fmt.Errorf("failed to create file %s: %v", targetPath, err)
 			}
 
 			if _, err := io.Copy(file, tarReader); err != nil {
 				file.Close()
-				return fmt.Errorf("failed to write file %s: %w", targetPath, err)
+				return fmt.Errorf("failed to write file %s: %v", targetPath, err)
 			}
 			file.Close()
 		case tar.TypeSymlink:
@@ -274,7 +272,7 @@ func downloadAndExtractLayer(rootfs, registry, repository, digest, token string)
 			if err := os.Symlink(header.Linkname, targetPath); err != nil {
 				// Ignore if symlink already exists
 				if !os.IsExist(err) {
-					return fmt.Errorf("failed to create symlink %s: %w", targetPath, err)
+					return fmt.Errorf("failed to create symlink %s: %v", targetPath, err)
 				}
 			}
 		case tar.TypeLink:
@@ -283,7 +281,7 @@ func downloadAndExtractLayer(rootfs, registry, repository, digest, token string)
 			if err := os.Link(linkTarget, targetPath); err != nil {
 				// Ignore if link already exists
 				if !os.IsExist(err) {
-					return fmt.Errorf("failed to create hard link %s: %w", targetPath, err)
+					return fmt.Errorf("failed to create hard link %s: %v", targetPath, err)
 				}
 			}
 		}

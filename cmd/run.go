@@ -23,6 +23,12 @@ var run = &cobra.Command{
 	Run:                Run,
 }
 
+func must(err error, errMsg string) {
+	if err != nil {
+		log.Fatalf(errMsg+": %v", err)
+	}
+}
+
 func Run(c *cobra.Command, args []string) {
 	// Extract the image name, subcommand and its flags
 	image, subcmd, argz := args[0], args[1], args[2:]
@@ -37,56 +43,36 @@ func Run(c *cobra.Command, args []string) {
 	defer configFile.Close()
 
 	var cfg ImageConfig
-	if err := json.NewDecoder(configFile).Decode(&cfg); err != nil {
-		log.Fatalf("Can't decode config file: %s", configPath)
-	}
+	must(json.NewDecoder(configFile).Decode(&cfg), "Can't decode config file")
 
 	// Prepare clean container environment
 	env, workingDir := prepareContainerEnv(&cfg)
 
 	if os.Getenv("IS_CHILD") == "1" {
 		// Unshare the mount namespace to isolate mounts from host
-		if err := syscall.Unshare(syscall.CLONE_NEWNS); err != nil {
-			log.Fatalf("Unshare mount namespace: %v", err)
-		}
+		must(syscall.Unshare(syscall.CLONE_NEWNS), "Unshare mount namespace")
 
 		// Make all mounts private to prevent mount propagation to parent namespace
-		if err := syscall.Mount("", "/", "", syscall.MS_PRIVATE|syscall.MS_REC, ""); err != nil {
-			log.Fatalf("Make mounts private: %v", err)
-		}
+		must(syscall.Mount("", "/", "", syscall.MS_PRIVATE|syscall.MS_REC, ""), "Make mounts private")
 
 		// Set the hostname
-		if err := syscall.Sethostname([]byte("container")); err != nil {
-			log.Fatalf("Set hostname: %v", err)
-		}
+		must(syscall.Sethostname([]byte("container")), "Set hostname")
 
 		// Change to Alpine root directory
-		if err := os.Chdir(rootfs); err != nil {
-			log.Fatalf("Change dir: %v", err)
-		}
+		must(os.Chdir(rootfs), "Change dir")
 
 		// Change root filesystem
-		if err := syscall.Chroot("."); err != nil {
-			log.Fatalf("Change root: %v", err)
-		}
+		must(syscall.Chroot("."), "Change root")
 
 		// Change to root directory in the new filesystem
-		if err := os.Chdir("/"); err != nil {
-			log.Fatalf("Change dir: %v", err)
-		}
+		must(os.Chdir("/"), "Change dir")
 
-		if err := os.Chdir(workingDir); err != nil {
-			log.Printf("Warning: failed to chdir to workingDir: %v, staying in /", err)
-		}
+		must(os.Chdir(workingDir), "Warning: failed to chdir to workingDir")
 
-		if err := os.MkdirAll("/proc", 0555); err != nil {
-			log.Fatalf("Make proc dir: %v", err)
-		}
+		must(os.MkdirAll("/proc", 0555), "Make proc dir")
 
 		// Mount proc dir inside rootfs
-		if err := syscall.Mount("proc", "/proc", "proc", 0, ""); err != nil {
-			log.Fatalf("Mount proc dir: %v", err)
-		}
+		must(syscall.Mount("proc", "/proc", "proc", 0, ""), "Mount proc dir")
 		defer syscall.Unmount("/proc", 0)
 
 		// Create the command
@@ -177,26 +163,26 @@ func setupCgroups() {
 	cgroupName := fmt.Sprintf("gocker%d", os.Getpid())
 	cgroupPath := filepath.Join(cgroupRoot, cgroupName)
 
-	if err := os.MkdirAll(cgroupPath, 0755); err != nil {
-		log.Fatalf("Failed to create cgroup v2 path: %v", err)
-	}
+	must(os.MkdirAll(cgroupPath, 0755), "Failed to create cgroup v2 path")
 
 	// Set memory limit in bytes
-	if err := os.WriteFile(filepath.Join(cgroupPath, "memory.max"), []byte("50M"), 0644); err != nil {
-		log.Fatalf("Failed to set memory limit: %v", err)
-	}
+	must(
+		os.WriteFile(filepath.Join(cgroupPath, "memory.max"), []byte("50M"), 0644),
+		"Failed to set memory limit",
+	)
 
 	// Set CPU limit (20%)
-	// Format: "<max> <period>" where max and period are in microseconds
-	if err := os.WriteFile(filepath.Join(cgroupPath, "cpu.max"), []byte("20000 100000"), 0644); err != nil {
-		log.Fatalf("Failed to set CPU limit: %v", err)
-	}
+	must(
+		// Format: "<max> <period>" where max and period are in microseconds
+		os.WriteFile(filepath.Join(cgroupPath, "cpu.max"), []byte("20000 100000"), 0644),
+		"Failed to set CPU limit",
+	)
 
 	// Add current process to the cgroup
-	if err := os.WriteFile(filepath.Join(cgroupPath, "cgroup.procs"),
-		[]byte(strconv.Itoa(os.Getpid())), 0644); err != nil {
-		log.Fatalf("Failed to add process to cgroup: %v", err)
-	}
+	must(
+		os.WriteFile(filepath.Join(cgroupPath, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0644),
+		"Failed to add process to cgroup",
+	)
 }
 
 func cleanupCgroups() {
@@ -208,13 +194,8 @@ func cleanupCgroups() {
 	rootProcs := filepath.Join(cgroupRoot, "cgroup.procs")
 	selfPid := []byte(strconv.Itoa(os.Getpid()))
 
-	if err := os.WriteFile(rootProcs, selfPid, 0644); err != nil {
-		log.Printf("Warning: Failed to move process out of cgroup: %v", err)
-		return
-	}
+	must(os.WriteFile(rootProcs, selfPid, 0644), "Warning: Failed to move process out of cgroup")
 
 	// Now it's safe to remove the cgroup directory
-	if err := os.RemoveAll(cgroupPath); err != nil {
-		log.Printf("Warning: Failed to remove cgroup directory: %v", err)
-	}
+	must(os.RemoveAll(cgroupPath), "Warning: Failed to remove cgroup directory")
 }
