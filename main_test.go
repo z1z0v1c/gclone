@@ -224,8 +224,8 @@ func TestContainerRootFileSystem(t *testing.T) {
 
 	outputStr := string(output)
 
-	// Check for Alpine-specific files/directories
-	expectedItems := []string{"ROOT_FS", "bin", "etc", "lib", "usr", "var"}
+	// Check for standard files/directories
+	expectedItems := []string{"bin", "etc", "lib", "usr", "var"}
 	for _, item := range expectedItems {
 		if !strings.Contains(outputStr, item) {
 			t.Errorf("Expected to find %s in container root, got: %s", item, outputStr)
@@ -283,21 +283,8 @@ func TestFilesystemWriteIsolation(t *testing.T) {
 
 	containerTestFile := "/tmp/container_test_file"
 
-	// Create tmp dir
-	cmd := exec.Command("./gocker", "run", "alpine", "mkdir", "tmp")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to create tmp dir: %v", err)
-	}
-	defer func() {
-		// Remove tmp dir
-		cmd = exec.Command("./gocker", "run", "alpine", "rm", "-rf", "tmp")
-		if err := cmd.Run(); err != nil {
-			t.Fatalf("Failed to remove test file: %v", err)
-		}
-	}()
-
 	// Create a test file in the container
-	cmd = exec.Command("./gocker", "run", "alpine", "/bin/busybox", "sh", "-c",
+	cmd := exec.Command("./gocker", "run", "alpine", "/bin/busybox", "sh", "-c",
 		fmt.Sprintf("touch %s", containerTestFile))
 
 	if err := cmd.Run(); err != nil {

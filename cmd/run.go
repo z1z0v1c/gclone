@@ -13,6 +13,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const relativeImagesPath = ".local/share/gocker/images/"
+
 var run = &cobra.Command{
 	Use:                "run [image] [command]",
 	Short:              "Run a container from a downloaded image",
@@ -25,8 +27,8 @@ func Run(c *cobra.Command, args []string) {
 	// Extract the image name, subcommand and its flags
 	image, subcmd, argz := args[0], args[1], args[2:]
 
-	rootfs := filepath.Join(os.Getenv("HOME"), ".local/share/gocker/images/", image, "rootfs")
-	configPath := filepath.Join(os.Getenv("HOME"), ".local/share/gocker/images/", image, ".config.json")
+	rootfs := filepath.Join(os.Getenv("HOME"), relativeImagesPath, image, "rootfs")
+	configPath := filepath.Join(os.Getenv("HOME"), relativeImagesPath, image, ".config.json")
 
 	configFile, err := os.Open(configPath)
 	if err != nil {
@@ -40,19 +42,7 @@ func Run(c *cobra.Command, args []string) {
 	}
 
 	// Prepare clean container environment
-	var env []string
-	workingDir := "/"
-
-	// Set minimal required environment variables
-	env = append(env, "HOME=/root")
-	env = append(env, "USER=root")
-	env = append(env, "SHELL=/bin/sh")
-	env = append(env, "TERM=xterm")
-
-	env = append(env, cfg.Config.Env...)
-	if cfg.Config.WorkingDir != "" {
-		workingDir = cfg.Config.WorkingDir
-	}
+	env, workingDir := prepareContainerEnv(&cfg)
 
 	if os.Getenv("IS_CHILD") == "1" {
 		// Unshare the mount namespace to isolate mounts from host
@@ -162,6 +152,24 @@ func Run(c *cobra.Command, args []string) {
 			log.Fatalf("Error: %v", err)
 		}
 	}
+}
+
+func prepareContainerEnv(cfg *ImageConfig) ([]string, string) {
+	var env []string
+	workingDir := "/"
+
+	// Set minimal required environment variables
+	env = append(env, "HOME=/root")
+	env = append(env, "USER=root")
+	env = append(env, "SHELL=/bin/sh")
+	env = append(env, "TERM=xterm")
+
+	env = append(env, cfg.Config.Env...)
+	if cfg.Config.WorkingDir != "" {
+		workingDir = cfg.Config.WorkingDir
+	}
+
+	return env, workingDir
 }
 
 func setupCgroups() {
