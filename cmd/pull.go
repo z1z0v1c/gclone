@@ -23,6 +23,8 @@ const (
 	auth     = "https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull"
 )
 
+var repository string
+
 var pull = &cobra.Command{
 	Use:                "pull [image]",
 	Short:              "Pull an image from Docker Hub",
@@ -32,38 +34,29 @@ var pull = &cobra.Command{
 }
 
 func Pull(c *cobra.Command, args []string) {
-	image := args[0]
-	repository := filepath.Join("library", image)
-	imagePath := filepath.Join(os.Getenv("HOME"), ".local/share/gocker/images/", image)
+	repository = filepath.Join("library", args[0])
+	imagePath := filepath.Join(os.Getenv("HOME"), relativeImagesPath, args[0])
 
-	log.Printf("Pulling %q image from the %q repository in %q registry...", image, repository, registry)
+	log.Printf("Pulling %q image from the %q repository in %q registry...", args[0], repository, registry)
 
 	token, err := authenticate(repository)
 	if err != nil {
 		log.Fatalf("authentication failed: %v", err)
 	}
 
-	manifest, err := fetchManifest(registry, repository, tag, token)
-	if err != nil {
-		log.Fatalf("failed to fetch manifest: %v", err)
-	}
+	var manifest Manifest
+	must(fetchManifest(&manifest, token), "failed to fetch manifest")
 
-	log.Printf("Manifest: %v", manifest)
-
-	log.Printf("Found %d layers to download\n", len(manifest.Layers))
-
-	// Create rootfs directory if it doesn't exist
 	must(os.RemoveAll(imagePath), "failed to remove existing rootfs")
 
+	// Create rootfs directory
 	must(os.MkdirAll(filepath.Join(imagePath, "rootfs"), 0755), "failed to create rootfs directory")
 
 	for i, layer := range manifest.Layers {
 		log.Printf("Downloading layer %d/%d: %s\n", i+1, len(manifest.Layers), layer.Digest)
 
-		must(
-			downloadAndExtractLayer(filepath.Join(imagePath, "rootfs"), registry, repository, layer.Digest, token),
-			"failed to download layer",
-		)
+		imageRoot := filepath.Join(imagePath, "rootfs")
+		must(downloadAndExtractLayer(imageRoot, layer.Digest, token), "failed to download layer")
 	}
 
 	fmt.Printf("Downloading config: %s\n", manifest.Config.Digest)
@@ -73,16 +66,16 @@ func Pull(c *cobra.Command, args []string) {
 		log.Fatalf("failed to fetch config: %v", err)
 	}
 
-	// Store config
-	configPath := filepath.Join(imagePath, ".config.json")
 	configData, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		log.Fatalf("failed to marshal config: %v", err)
 	}
 
+	// Save config data
+	configPath := filepath.Join(imagePath, ".config.json")
 	must(os.WriteFile(configPath, configData, 0644), "failed to write config")
 
-	fmt.Printf("Image %q pulled successfully to %q\n", image, imagePath)
+	fmt.Printf("Image %q pulled successfully to %q\n", args[0], imagePath)
 }
 
 func authenticate(repository string) (string, error) {
@@ -111,14 +104,14 @@ func authenticate(repository string) (string, error) {
 	return authResp.Token, nil
 }
 
-func fetchManifest(registry, repository, tag, token string) (*Manifest, error) {
+func fetchManifest(manifest *Manifest, token string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, tag)
 
 	log.Printf("Fetching manifest from: %s\n", url)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -128,47 +121,53 @@ func fetchManifest(registry, repository, tag, token string) (*Manifest, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch manifest with status: %d", resp.StatusCode)
+		return fmt.Errorf("failed to fetch manifest with status: %d", resp.StatusCode)
 	}
 
 	ctype := resp.Header.Get("Content-Type")
+
 	// Handle OCI Index (manifest list)
 	if ctype == "application/vnd.oci.image.index.v1+json" || ctype == "application/vnd.docker.distribution.manifest.list.v2+json" {
 		var index ManifestIndex
 		if err := json.NewDecoder(resp.Body).Decode(&index); err != nil {
-			return nil, fmt.Errorf("error decoding manifest index: %w", err)
+			return fmt.Errorf("error decoding manifest index: %w", err)
 		}
+
 		log.Printf("Received index, contains %d platform manifests", len(index.Manifests))
 
 		for _, m := range index.Manifests {
 			if m.Platform.OS == "linux" && m.Platform.Architecture == "amd64" {
 				log.Printf("Selected manifest digest for linux/amd64: %s", m.Digest)
-				return fetchManifestByDigest(repository, m.Digest, token)
+
+				return fetchManifestByDigest(manifest, m.Digest, token)
 			}
 		}
-		return nil, fmt.Errorf("no matching platform found in manifest index")
+
+		return fmt.Errorf("no matching platform found in manifest index")
 	}
 
-	var manifest Manifest
-	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
-		return nil, err
+	if err := json.NewDecoder(resp.Body).Decode(manifest); err != nil {
+		return err
 	}
 
-	return &manifest, nil
+	log.Printf("Found %d layers to download\n", len(manifest.Layers))
+
+	return nil
 }
 
-func fetchManifestByDigest(repository, digest, token string) (*Manifest, error) {
+func fetchManifestByDigest(manifest *Manifest, digest, token string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, digest)
+
 	log.Printf("Fetching platform-specific manifest: %s", url)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -177,23 +176,22 @@ func fetchManifestByDigest(repository, digest, token string) (*Manifest, error) 
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch manifest by digest, status: %d", resp.StatusCode)
+		return fmt.Errorf("failed to fetch manifest by digest, status: %d", resp.StatusCode)
 	}
 
-	var manifest Manifest
-	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
-		return nil, err
+	if err := json.NewDecoder(resp.Body).Decode(manifest); err != nil {
+		return err
 	}
 
-	return &manifest, nil
+	return nil
 }
 
-func downloadAndExtractLayer(rootfs, registry, repository, digest, token string) error {
+func downloadAndExtractLayer(rootfs, digest, token string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, digest)
 
 	req, err := http.NewRequest("GET", url, nil)
