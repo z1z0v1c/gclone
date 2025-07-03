@@ -61,10 +61,8 @@ func Pull(c *cobra.Command, args []string) {
 
 	fmt.Printf("Downloading config: %s\n", manifest.Config.Digest)
 
-	config, err := fetchConfig(registry, repository, manifest.Config.Digest, token)
-	if err != nil {
-		log.Fatalf("failed to fetch config: %v", err)
-	}
+	var config ImageConfig
+	must(fetchConfig(&config, manifest.Config.Digest, token), "failed to fetch config")
 
 	configData, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
@@ -116,8 +114,7 @@ func fetchManifest(manifest *Manifest, token string) error {
 
 	setRequestHeaders(req, token)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -203,8 +200,7 @@ func downloadAndExtractLayer(rootfs, digest, token string) error {
 
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	httpClient := &http.Client{}
-	resp, err := httpClient.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -296,31 +292,29 @@ func downloadAndExtractLayer(rootfs, digest, token string) error {
 	return nil
 }
 
-func fetchConfig(registry, repository, digest, token string) (*ImageConfig, error) {
+func fetchConfig(config *ImageConfig, digest, token string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, digest)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch config with status: %d", resp.StatusCode)
+		return fmt.Errorf("failed to fetch config with status: %d", resp.StatusCode)
 	}
 
-	var config ImageConfig
 	if err := json.NewDecoder(resp.Body).Decode(&config); err != nil {
-		return nil, err
+		return err
 	}
 
-	return &config, nil
+	return nil
 }
