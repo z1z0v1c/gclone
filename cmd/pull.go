@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -45,38 +44,43 @@ func Pull(c *cobra.Command, args []string) {
 
 	fmt.Printf("Pulling %q image from the %q repository in %q registry...\n", image, repository, registry)
 
-	must(authenticate(), "authentication failed")
+	must(authenticate(), "Authentication failed")
 
 	var manifest Manifest
-	must(fetchManifest(&manifest), "failed to fetch manifest")
+	must(fetchManifest(&manifest), "Failed to fetch manifest")
 
-	must(os.RemoveAll(imagePath), "failed to remove existing rootfs")
+	must(os.RemoveAll(imagePath), "Failed to remove existing rootfs")
 
 	// Create rootfs directory
-	must(os.MkdirAll(filepath.Join(imagePath, "rootfs"), 0755), "failed to create rootfs directory")
+	must(os.MkdirAll(filepath.Join(imagePath, "rootfs"), 0755), "Failed to create rootfs directory")
 
 	for i, layer := range manifest.Layers {
 		fmt.Printf("Downloading layer %d/%d: %s\n", i+1, len(manifest.Layers), layer.Digest)
 
 		imageRoot := filepath.Join(imagePath, "rootfs")
-		must(downloadAndExtractLayer(imageRoot, layer.Digest), "failed to download layer")
+		must(downloadAndExtractLayer(imageRoot, layer.Digest), "Failed to download layer")
 	}
 
 	fmt.Printf("Downloading config: %s\n", manifest.Config.Digest)
 
 	var config ImageConfig
-	must(fetchConfig(&config, manifest.Config.Digest), "failed to fetch config")
+	must(fetchConfig(&config, manifest.Config.Digest), "Failed to fetch config")
 
 	configData, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
-		log.Fatalf("failed to marshal config: %v", err)
+		fatalf("Failed to marshal config: %v", err)
 	}
 
 	// Save config data
 	configPath := filepath.Join(imagePath, ".config.json")
-	must(os.WriteFile(configPath, configData, 0644), "failed to write config")
+	must(os.WriteFile(configPath, configData, 0644), "Failed to write config")
 
 	fmt.Printf("Image %q pulled successfully to %q\n", args[0], imagePath)
+}
+
+func fatalf(format string, a ...any) {
+	fmt.Printf(format, a...)
+	os.Exit(1)
 }
 
 func setRequestHeaders(req *http.Request) {
@@ -89,7 +93,7 @@ func authenticate() error {
 	// For Docker Hub, we need to get a token from auth.docker.io
 	authURL := fmt.Sprintf(authBaseURL, repository)
 
-	log.Printf("Authenticating with: %s\n", authURL)
+	fmt.Printf("Authenticating with: %s\n", authURL)
 
 	resp, err := http.Get(authURL)
 	if err != nil {
@@ -106,7 +110,7 @@ func authenticate() error {
 		return err
 	}
 
-	log.Printf("Authentication successful, token length: %d\n", len(authResp.Token))
+	fmt.Printf("Authentication successful, token length: %d\n", len(authResp.Token))
 
 	token = authResp.Token
 
@@ -116,7 +120,7 @@ func authenticate() error {
 func fetchManifest(manifest *Manifest) error {
 	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, tag)
 
-	log.Printf("Fetching manifest from: %s\n", url)
+	fmt.Printf("Fetching manifest from: %s\n", url)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -144,11 +148,11 @@ func fetchManifest(manifest *Manifest) error {
 			return fmt.Errorf("error decoding manifest index: %w", err)
 		}
 
-		log.Printf("Received index, contains %d platform manifests", len(index.Manifests))
+		fmt.Printf("Received index, contains %d platform manifests\n", len(index.Manifests))
 
 		for _, m := range index.Manifests {
 			if m.Platform.OS == "linux" && m.Platform.Architecture == "amd64" {
-				log.Printf("Selected manifest digest for linux/amd64: %s", m.Digest)
+				fmt.Printf("Selected manifest digest for linux/amd64: %s", m.Digest)
 
 				return fetchManifestByDigest(manifest, m.Digest)
 			}
@@ -161,7 +165,7 @@ func fetchManifest(manifest *Manifest) error {
 		return err
 	}
 
-	log.Printf("Found %d layers to download\n", len(manifest.Layers))
+	fmt.Printf("Found %d layers to download\n", len(manifest.Layers))
 
 	return nil
 }
@@ -169,9 +173,9 @@ func fetchManifest(manifest *Manifest) error {
 func fetchManifestByDigest(manifest *Manifest, digest string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, digest)
 
-	log.Printf("Fetching platform-specific manifest: %s", url)
+	fmt.Printf("Fetching platform-specific manifest: %s", url)
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
@@ -198,7 +202,7 @@ func fetchManifestByDigest(manifest *Manifest, digest string) error {
 func downloadAndExtractLayer(rootfs, digest string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, digest)
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
@@ -263,6 +267,7 @@ func extractLayer(tarReader *tar.Reader, rootfs string) error {
 			if err := os.MkdirAll(targetPath, os.FileMode(header.Mode)); err != nil {
 				return fmt.Errorf("failed to create directory %s: %v", targetPath, err)
 			}
+
 		case tar.TypeReg:
 			// Create directory for file if it doesn't exist
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
@@ -280,6 +285,7 @@ func extractLayer(tarReader *tar.Reader, rootfs string) error {
 				return fmt.Errorf("failed to write file %s: %v", targetPath, err)
 			}
 			file.Close()
+
 		case tar.TypeSymlink:
 			// Create symbolic link
 			if err := os.Symlink(header.Linkname, targetPath); err != nil {
@@ -288,6 +294,7 @@ func extractLayer(tarReader *tar.Reader, rootfs string) error {
 					return fmt.Errorf("failed to create symlink %s: %v", targetPath, err)
 				}
 			}
+
 		case tar.TypeLink:
 			// Create hard link
 			linkTarget := filepath.Join(rootfs, header.Linkname)

@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,7 +24,8 @@ var run = &cobra.Command{
 
 func must(err error, errMsg string) {
 	if err != nil {
-		log.Fatalf(errMsg+": %v", err)
+		fatalf(errMsg+": %v\n", err)
+		os.Exit(1)
 	}
 }
 
@@ -38,15 +38,15 @@ func Run(c *cobra.Command, args []string) {
 
 	configFile, err := os.Open(configPath)
 	if err != nil {
-		log.Fatalf("Can't open config file: %s", configPath)
+		fatalf("failed to open config file: %s", configPath)
 	}
 	defer configFile.Close()
 
 	var cfg ImageConfig
-	must(json.NewDecoder(configFile).Decode(&cfg), "Can't decode config file")
+	must(json.NewDecoder(configFile).Decode(&cfg), "failed to decode config file")
 
 	// Prepare clean container environment
-	env, workingDir := prepareContainerEnv(&cfg)
+	env, workDir := prepareContainerEnv(&cfg)
 
 	if os.Getenv("IS_CHILD") == "1" {
 		// Unshare the mount namespace to isolate mounts from host
@@ -67,7 +67,7 @@ func Run(c *cobra.Command, args []string) {
 		// Change to root directory in the new filesystem
 		must(os.Chdir("/"), "Change dir")
 
-		must(os.Chdir(workingDir), "Warning: failed to chdir to workingDir")
+		must(os.Chdir(workDir), "Warning: failed to chdir to workingDir")
 
 		must(os.MkdirAll("/proc", 0555), "Make proc dir")
 
@@ -84,7 +84,7 @@ func Run(c *cobra.Command, args []string) {
 		cmd.Stderr = os.Stderr
 
 		cmd.Env = env
-		cmd.Dir = workingDir
+		cmd.Dir = workDir
 
 		// Execute command
 		if err := cmd.Run(); err != nil {
@@ -94,7 +94,7 @@ func Run(c *cobra.Command, args []string) {
 			if exitErr, ok := err.(*exec.ExitError); ok {
 				os.Exit(exitErr.ExitCode())
 			} else {
-				log.Fatalf("Error: %v", err)
+				fatalf("Error: %v", err)
 			}
 		}
 
@@ -135,7 +135,7 @@ func Run(c *cobra.Command, args []string) {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			os.Exit(exitErr.ExitCode())
 		} else {
-			log.Fatalf("Error: %v", err)
+			fatalf("Error: %v", err)
 		}
 	}
 }
