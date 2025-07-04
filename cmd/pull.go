@@ -45,7 +45,7 @@ func Pull(c *cobra.Command, args []string) {
 	must(authenticate(), "authentication failed")
 
 	var manifest Manifest
-	must(fetchManifest(&manifest, token), "failed to fetch manifest")
+	must(fetchManifest(&manifest), "failed to fetch manifest")
 
 	must(os.RemoveAll(imagePath), "failed to remove existing rootfs")
 
@@ -56,13 +56,13 @@ func Pull(c *cobra.Command, args []string) {
 		log.Printf("Downloading layer %d/%d: %s\n", i+1, len(manifest.Layers), layer.Digest)
 
 		imageRoot := filepath.Join(imagePath, "rootfs")
-		must(downloadAndExtractLayer(imageRoot, layer.Digest, token), "failed to download layer")
+		must(downloadAndExtractLayer(imageRoot, layer.Digest), "failed to download layer")
 	}
 
 	fmt.Printf("Downloading config: %s\n", manifest.Config.Digest)
 
 	var config ImageConfig
-	must(fetchConfig(&config, manifest.Config.Digest, token), "failed to fetch config")
+	must(fetchConfig(&config, manifest.Config.Digest), "failed to fetch config")
 
 	configData, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
@@ -74,6 +74,12 @@ func Pull(c *cobra.Command, args []string) {
 	must(os.WriteFile(configPath, configData, 0644), "failed to write config")
 
 	fmt.Printf("Image %q pulled successfully to %q\n", args[0], imagePath)
+}
+
+func setRequestHeaders(req *http.Request) {
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+	req.Header.Set("User-Agent", "gocker/1.0")
 }
 
 func authenticate() error {
@@ -104,7 +110,7 @@ func authenticate() error {
 	return nil
 }
 
-func fetchManifest(manifest *Manifest, token string) error {
+func fetchManifest(manifest *Manifest) error {
 	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, tag)
 
 	log.Printf("Fetching manifest from: %s\n", url)
@@ -114,7 +120,7 @@ func fetchManifest(manifest *Manifest, token string) error {
 		return err
 	}
 
-	setRequestHeaders(req, token)
+	setRequestHeaders(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -141,7 +147,7 @@ func fetchManifest(manifest *Manifest, token string) error {
 			if m.Platform.OS == "linux" && m.Platform.Architecture == "amd64" {
 				log.Printf("Selected manifest digest for linux/amd64: %s", m.Digest)
 
-				return fetchManifestByDigest(manifest, m.Digest, token)
+				return fetchManifestByDigest(manifest, m.Digest)
 			}
 		}
 
@@ -157,7 +163,7 @@ func fetchManifest(manifest *Manifest, token string) error {
 	return nil
 }
 
-func fetchManifestByDigest(manifest *Manifest, digest, token string) error {
+func fetchManifestByDigest(manifest *Manifest, digest string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, digest)
 
 	log.Printf("Fetching platform-specific manifest: %s", url)
@@ -167,7 +173,7 @@ func fetchManifestByDigest(manifest *Manifest, digest, token string) error {
 		return err
 	}
 
-	setRequestHeaders(req, token)
+	setRequestHeaders(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -186,13 +192,7 @@ func fetchManifestByDigest(manifest *Manifest, digest, token string) error {
 	return nil
 }
 
-func setRequestHeaders(req *http.Request, token string) {
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
-	req.Header.Set("User-Agent", "gocker/1.0")
-}
-
-func downloadAndExtractLayer(rootfs, digest, token string) error {
+func downloadAndExtractLayer(rootfs, digest string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, digest)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -294,7 +294,7 @@ func downloadAndExtractLayer(rootfs, digest, token string) error {
 	return nil
 }
 
-func fetchConfig(config *ImageConfig, digest, token string) error {
+func fetchConfig(config *ImageConfig, digest string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, digest)
 
 	req, err := http.NewRequest("GET", url, nil)
