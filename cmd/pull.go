@@ -29,18 +29,21 @@ var (
 )
 
 var pull = &cobra.Command{
-	Use:                "pull [image]",
-	Short:              "Pull an image from Docker Hub",
-	DisableFlagParsing: true,
-	Args:               cobra.MinimumNArgs(1),
-	Run:                Pull,
+	Use:                   "pull [image]",
+	Short:                 "Pull an image from Docker Hub",
+	Long:                  "Pull an image from Docker Hub",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ExactArgs(1),
+	Run:                   Pull,
 }
 
 func Pull(c *cobra.Command, args []string) {
-	repository = filepath.Join("library", args[0])
-	imagePath := filepath.Join(os.Getenv("HOME"), relativeImagesPath, args[0])
+	image := args[0]
 
-	log.Printf("Pulling %q image from the %q repository in %q registry...", args[0], repository, registry)
+	repository = filepath.Join("library", image)
+	imagePath := filepath.Join(os.Getenv("HOME"), relativeImagesPath, image)
+
+	fmt.Printf("Pulling %q image from the %q repository in %q registry...\n", image, repository, registry)
 
 	must(authenticate(), "authentication failed")
 
@@ -53,7 +56,7 @@ func Pull(c *cobra.Command, args []string) {
 	must(os.MkdirAll(filepath.Join(imagePath, "rootfs"), 0755), "failed to create rootfs directory")
 
 	for i, layer := range manifest.Layers {
-		log.Printf("Downloading layer %d/%d: %s\n", i+1, len(manifest.Layers), layer.Digest)
+		fmt.Printf("Downloading layer %d/%d: %s\n", i+1, len(manifest.Layers), layer.Digest)
 
 		imageRoot := filepath.Join(imagePath, "rootfs")
 		must(downloadAndExtractLayer(imageRoot, layer.Digest), "failed to download layer")
@@ -227,6 +230,18 @@ func downloadAndExtractLayer(rootfs, digest string) error {
 	tarReader := tar.NewReader(gzipReader)
 
 	// Extract files
+	extractLayer(tarReader, rootfs)
+
+	// Verify the digest
+	actualDigest := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
+	if actualDigest != digest {
+		return fmt.Errorf("digest mismatch: expected %s, got %s", digest, actualDigest)
+	}
+
+	return nil
+}
+
+func extractLayer(tarReader *tar.Reader, rootfs string) error {
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
@@ -283,12 +298,6 @@ func downloadAndExtractLayer(rootfs, digest string) error {
 				}
 			}
 		}
-	}
-
-	// Verify the digest
-	actualDigest := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
-	if actualDigest != digest {
-		return fmt.Errorf("digest mismatch: expected %s, got %s", digest, actualDigest)
 	}
 
 	return nil
