@@ -18,12 +18,15 @@ import (
 )
 
 const (
-	registry = "registry-1.docker.io"
-	tag      = "latest"
-	auth     = "https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull"
+	registry    = "registry-1.docker.io"
+	tag         = "latest"
+	authBaseURL = "https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull"
 )
 
-var repository string
+var (
+	repository string
+	token      string
+)
 
 var pull = &cobra.Command{
 	Use:                "pull [image]",
@@ -39,10 +42,7 @@ func Pull(c *cobra.Command, args []string) {
 
 	log.Printf("Pulling %q image from the %q repository in %q registry...", args[0], repository, registry)
 
-	token, err := authenticate(repository)
-	if err != nil {
-		log.Fatalf("authentication failed: %v", err)
-	}
+	must(authenticate(), "authentication failed")
 
 	var manifest Manifest
 	must(fetchManifest(&manifest, token), "failed to fetch manifest")
@@ -76,30 +76,32 @@ func Pull(c *cobra.Command, args []string) {
 	fmt.Printf("Image %q pulled successfully to %q\n", args[0], imagePath)
 }
 
-func authenticate(repository string) (string, error) {
+func authenticate() error {
 	// For Docker Hub, we need to get a token from auth.docker.io
-	authURL := fmt.Sprintf(auth, repository)
+	authURL := fmt.Sprintf(authBaseURL, repository)
 
 	log.Printf("Authenticating with: %s\n", authURL)
 
 	resp, err := http.Get(authURL)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("authentication failed with status: %d", resp.StatusCode)
+		return fmt.Errorf("authentication failed with status: %d", resp.StatusCode)
 	}
 
 	var authResp AuthResponse
 	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
-		return "", err
+		return err
 	}
 
 	log.Printf("Authentication successful, token length: %d\n", len(authResp.Token))
 
-	return authResp.Token, nil
+	token = authResp.Token
+
+	return nil
 }
 
 func fetchManifest(manifest *Manifest, token string) error {
