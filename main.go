@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/z1z0v1c/gocker/cmd"
+	"github.com/z1z0v1c/gocker/cmd/gocker"
 )
 
 func main() {
-	cmd.Execute()
+	gocker.Execute()
 }

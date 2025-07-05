@@ -1,4 +1,4 @@
-package cmd
+package gocker
 
 type AuthResponse struct {
 	Token string `json:"token"`
