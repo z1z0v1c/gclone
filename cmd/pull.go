@@ -27,55 +27,55 @@ var (
 	token      string
 )
 
-var pull = &cobra.Command{
+var pullCmd = &cobra.Command{
 	Use:                   "pull [image]",
 	Short:                 "Pull an image from Docker Hub",
 	Long:                  "Pull an image from Docker Hub",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),
-	Run:                   Pull,
+	Run:                   pull,
 }
 
-func Pull(c *cobra.Command, args []string) {
-	image := args[0]
+func pull(c *cobra.Command, args []string) {
+	img := args[0]
 
-	repository = filepath.Join("library", image)
-	imagePath := filepath.Join(os.Getenv("HOME"), relativeImagesPath, image)
+	repository = filepath.Join("library", img)
+	imgPath := filepath.Join(os.Getenv("HOME"), relativeImagesPath, img)
 
-	fmt.Printf("Pulling %q image from the %q repository in %q registry...\n", image, repository, registry)
+	fmt.Printf("Pulling %q image from the %q repository in %q registry...\n", img, repository, registry)
 
 	must(authenticate(), "Authentication failed")
 
-	var manifest Manifest
-	must(fetchManifest(&manifest), "Failed to fetch manifest")
+	var mf Manifest
+	must(fetchManifest(&mf), "Failed to fetch manifest")
 
-	must(os.RemoveAll(imagePath), "Failed to remove existing rootfs")
+	must(os.RemoveAll(imgPath), "Failed to remove existing rootfs")
 
 	// Create rootfs directory
-	must(os.MkdirAll(filepath.Join(imagePath, "rootfs"), 0755), "Failed to create rootfs directory")
+	must(os.MkdirAll(filepath.Join(imgPath, "rootfs"), 0755), "Failed to create rootfs directory")
 
-	for i, layer := range manifest.Layers {
-		fmt.Printf("Downloading layer %d/%d: %s\n", i+1, len(manifest.Layers), layer.Digest)
+	for i, layer := range mf.Layers {
+		fmt.Printf("Downloading layer %d/%d: %s\n", i+1, len(mf.Layers), layer.Digest)
 
-		imageRoot := filepath.Join(imagePath, "rootfs")
-		must(downloadAndExtractLayer(imageRoot, layer.Digest), "Failed to download layer")
+		imgRoot := filepath.Join(imgPath, "rootfs")
+		must(downloadAndExtractLayer(imgRoot, layer.Digest), "Failed to download layer")
 	}
 
-	fmt.Printf("Downloading config: %s\n", manifest.Config.Digest)
+	fmt.Printf("Downloading config: %s\n", mf.Config.Digest)
 
-	var config ImageConfig
-	must(fetchConfig(&config, manifest.Config.Digest), "Failed to fetch config")
+	var cfg ImageConfig
+	must(fetchConfig(&cfg, mf.Config.Digest), "Failed to fetch config")
 
-	configData, err := json.MarshalIndent(config, "", "  ")
+	cfgData, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		fatalf("Failed to marshal config: %v", err)
 	}
 
 	// Save config data
-	configPath := filepath.Join(imagePath, ".config.json")
-	must(os.WriteFile(configPath, configData, 0644), "Failed to write config")
+	cfgPath := filepath.Join(imgPath, ".config.json")
+	must(os.WriteFile(cfgPath, cfgData, 0644), "Failed to write config")
 
-	fmt.Printf("Image %q pulled successfully to %q\n", args[0], imagePath)
+	fmt.Printf("Image %q pulled successfully to %q\n", args[0], imgPath)
 }
 
 func fatalf(format string, a ...any) {
@@ -117,7 +117,7 @@ func authenticate() error {
 	return nil
 }
 
-func fetchManifest(manifest *Manifest) error {
+func fetchManifest(mf *Manifest) error {
 	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, tag)
 
 	fmt.Printf("Fetching manifest from: %s\n", url)
@@ -154,23 +154,23 @@ func fetchManifest(manifest *Manifest) error {
 			if m.Platform.OS == "linux" && m.Platform.Architecture == "amd64" {
 				fmt.Printf("Selected manifest digest for linux/amd64: %s", m.Digest)
 
-				return fetchManifestByDigest(manifest, m.Digest)
+				return fetchManifestByDigest(mf, m.Digest)
 			}
 		}
 
 		return fmt.Errorf("no matching platform found in manifest index")
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(manifest); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(mf); err != nil {
 		return err
 	}
 
-	fmt.Printf("Found %d layers to download\n", len(manifest.Layers))
+	fmt.Printf("Found %d layers to download\n", len(mf.Layers))
 
 	return nil
 }
 
-func fetchManifestByDigest(manifest *Manifest, digest string) error {
+func fetchManifestByDigest(mf *Manifest, digest string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, digest)
 
 	fmt.Printf("Fetching platform-specific manifest: %s", url)
@@ -192,14 +192,14 @@ func fetchManifestByDigest(manifest *Manifest, digest string) error {
 		return fmt.Errorf("failed to fetch manifest by digest, status: %d", resp.StatusCode)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(manifest); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(mf); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func downloadAndExtractLayer(rootfs, digest string) error {
+func downloadAndExtractLayer(imgRoot, digest string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, digest)
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -224,17 +224,17 @@ func downloadAndExtractLayer(rootfs, digest string) error {
 	reader := io.TeeReader(resp.Body, hasher)
 
 	// Create gzip reader
-	gzipReader, err := gzip.NewReader(reader)
+	gr, err := gzip.NewReader(reader)
 	if err != nil {
 		return fmt.Errorf("failed to create gzip reader: %v", err)
 	}
-	defer gzipReader.Close()
+	defer gr.Close()
 
 	// Create tar reader
-	tarReader := tar.NewReader(gzipReader)
+	tr := tar.NewReader(gr)
 
 	// Extract files
-	extractLayer(tarReader, rootfs)
+	extractLayer(tr, imgRoot)
 
 	// Verify the digest
 	actualDigest := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
@@ -245,9 +245,9 @@ func downloadAndExtractLayer(rootfs, digest string) error {
 	return nil
 }
 
-func extractLayer(tarReader *tar.Reader, rootfs string) error {
+func extractLayer(tr *tar.Reader, imgRoot string) error {
 	for {
-		header, err := tarReader.Next()
+		header, err := tr.Next()
 		if err == io.EOF {
 			break
 		}
@@ -255,10 +255,10 @@ func extractLayer(tarReader *tar.Reader, rootfs string) error {
 			return fmt.Errorf("failed to read tar header: %v", err)
 		}
 
-		targetPath := filepath.Join(rootfs, header.Name)
+		targetPath := filepath.Join(imgRoot, header.Name)
 
 		// Security check: prevent path traversal
-		if !strings.HasPrefix(targetPath, rootfs) {
+		if !strings.HasPrefix(targetPath, imgRoot) {
 			continue
 		}
 
@@ -280,7 +280,7 @@ func extractLayer(tarReader *tar.Reader, rootfs string) error {
 				return fmt.Errorf("failed to create file %s: %v", targetPath, err)
 			}
 
-			if _, err := io.Copy(file, tarReader); err != nil {
+			if _, err := io.Copy(file, tr); err != nil {
 				file.Close()
 				return fmt.Errorf("failed to write file %s: %v", targetPath, err)
 			}
@@ -297,7 +297,7 @@ func extractLayer(tarReader *tar.Reader, rootfs string) error {
 
 		case tar.TypeLink:
 			// Create hard link
-			linkTarget := filepath.Join(rootfs, header.Linkname)
+			linkTarget := filepath.Join(imgRoot, header.Linkname)
 			if err := os.Link(linkTarget, targetPath); err != nil {
 				// Ignore if link already exists
 				if !os.IsExist(err) {

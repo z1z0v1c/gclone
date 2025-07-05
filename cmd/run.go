@@ -14,12 +14,12 @@ import (
 
 const relativeImagesPath = ".local/share/gocker/images/"
 
-var run = &cobra.Command{
+var runCmd = &cobra.Command{
 	Use:                "run [image] [command]",
 	Short:              "Run a container from a downloaded image",
 	DisableFlagParsing: true,
 	Args:               cobra.MinimumNArgs(1),
-	Run:                Run,
+	Run:                run,
 }
 
 func must(err error, errMsg string) {
@@ -29,21 +29,21 @@ func must(err error, errMsg string) {
 	}
 }
 
-func Run(c *cobra.Command, args []string) {
-	// Extract the image name, subcommand and its flags
-	image, subcmd, argz := args[0], args[1], args[2:]
+func run(c *cobra.Command, args []string) {
+	// Extract image name, subcommand and its arguments
+	img, subcmd, argz := args[0], args[1], args[2:]
 
-	rootfs := filepath.Join(os.Getenv("HOME"), relativeImagesPath, image, "rootfs")
-	configPath := filepath.Join(os.Getenv("HOME"), relativeImagesPath, image, ".config.json")
+	imgRoot := filepath.Join(os.Getenv("HOME"), relativeImagesPath, img, "rootfs")
+	cfgPath := filepath.Join(os.Getenv("HOME"), relativeImagesPath, img, ".config.json")
 
-	configFile, err := os.Open(configPath)
+	cfgFile, err := os.Open(cfgPath)
 	if err != nil {
-		fatalf("failed to open config file: %s", configPath)
+		fatalf("failed to open config file: %s", cfgPath)
 	}
-	defer configFile.Close()
+	defer cfgFile.Close()
 
 	var cfg ImageConfig
-	must(json.NewDecoder(configFile).Decode(&cfg), "failed to decode config file")
+	must(json.NewDecoder(cfgFile).Decode(&cfg), "failed to decode config file")
 
 	// Prepare clean container environment
 	env, workDir := prepareContainerEnv(&cfg)
@@ -59,7 +59,7 @@ func Run(c *cobra.Command, args []string) {
 		must(syscall.Sethostname([]byte("container")), "Set hostname")
 
 		// Change to Alpine root directory
-		must(os.Chdir(rootfs), "Change dir")
+		must(os.Chdir(imgRoot), "Change dir")
 
 		// Change root filesystem
 		must(syscall.Chroot("."), "Change root")
@@ -142,7 +142,7 @@ func Run(c *cobra.Command, args []string) {
 
 func prepareContainerEnv(cfg *ImageConfig) ([]string, string) {
 	var env []string
-	workingDir := "/"
+	workDir := "/"
 
 	// Set minimal required environment variables
 	env = append(env, "HOME=/root")
@@ -152,10 +152,10 @@ func prepareContainerEnv(cfg *ImageConfig) ([]string, string) {
 
 	env = append(env, cfg.Config.Env...)
 	if cfg.Config.WorkingDir != "" {
-		workingDir = cfg.Config.WorkingDir
+		workDir = cfg.Config.WorkingDir
 	}
 
-	return env, workingDir
+	return env, workDir
 }
 
 func setupCgroups() {
