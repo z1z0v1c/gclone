@@ -1,4 +1,4 @@
-package main
+package gocker
 
 import (
 	"encoding/json"
@@ -12,9 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const relativeImagesPath = ".local/share/gocker/images/"
-
-var runCmd = &cobra.Command{
+var RunCmd = &cobra.Command{
 	Use:                "run [image] [command]",
 	Short:              "Run a container from a downloaded image",
 	DisableFlagParsing: true,

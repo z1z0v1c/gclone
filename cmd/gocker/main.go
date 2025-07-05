@@ -5,15 +5,16 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	g "github.com/z1z0v1c/gocker/internal/gocker"
 )
 
 var gocker = &cobra.Command{
-	Use:   "gocker [command]",
-	Short: "My own version of Docker",
+	Use:   "gocker command image [subcommand] [flags]",
+	Short: "Simple Docker clone",
 }
 
 func init() {
-	gocker.AddCommand(runCmd, pullCmd)
+	gocker.AddCommand(g.RunCmd, g.PullCmd)
 }
 
 func main() {

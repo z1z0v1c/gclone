@@ -1,4 +1,4 @@
-package main
+package gocker
 
 import (
 	"archive/tar"
@@ -27,7 +27,7 @@ var (
 	token      string
 )
 
-var pullCmd = &cobra.Command{
+var PullCmd = &cobra.Command{
 	Use:                   "pull [image]",
 	Short:                 "Pull an image from Docker Hub",
 	Long:                  "Pull an image from Docker Hub",
