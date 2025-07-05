@@ -1,4 +1,4 @@
-package gocker
+package main
 
 import (
 	"archive/tar"

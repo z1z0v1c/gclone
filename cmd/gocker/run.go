@@ -1,4 +1,4 @@
-package gocker
+package main
 
 import (
 	"encoding/json"

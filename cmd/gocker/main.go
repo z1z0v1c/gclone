@@ -1,4 +1,4 @@
-package gocker
+package main
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ func init() {
 	gocker.AddCommand(runCmd, pullCmd)
 }
 
-func Execute() {
+func main() {
 	if err := gocker.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

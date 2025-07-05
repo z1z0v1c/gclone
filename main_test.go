@@ -44,7 +44,7 @@ func TestCommandExecution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := exec.Command("go", append([]string{"run", "main.go"}, tt.args...)...)
+			cmd := exec.Command("./gocker", tt.args...)
 			output, err := cmd.CombinedOutput()
 
 			if tt.expectedError {
@@ -130,7 +130,7 @@ func TestNamespaceIsolation(t *testing.T) {
 	}
 
 	// Test that container has different hostname
-	cmd := exec.Command("go", "run", "main.go", "run", "alpine", "hostname")
+	cmd := exec.Command("./gocker", "run", "alpine", "hostname")
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("Failed to run container: %v", err)
