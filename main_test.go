@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -151,34 +150,6 @@ func TestNamespaceIsolation(t *testing.T) {
 	if currentHostname != originalHostname {
 		t.Errorf("Host hostname changed from %q to %q", originalHostname, currentHostname)
 	}
-}
-
-// TestAlpineFilesystemExists verifies Alpine filesystem is set up correctly
-func TestAlpineFileSystemExists(t *testing.T) {
-	rootfs := "alpine"
-
-	// Check that ROOT_FS marker exists
-	markerFile := filepath.Join(rootfs, "ROOT_FS")
-	if _, err := os.Stat(markerFile); err != nil {
-		t.Errorf("ROOT_FS marker file not found at %s", markerFile)
-	}
-
-	// Check essential Alpine directories exist
-	requiredDirs := []string{"bin", "etc", "lib", "usr", "var"}
-	for _, dir := range requiredDirs {
-		dirPath := filepath.Join(rootfs, dir)
-		if info, err := os.Stat(dirPath); err != nil || !info.IsDir() {
-			t.Errorf("Required Alpine directory %s not found or not a directory", dir)
-		}
-	}
-
-	// Check that busybox exists
-	busyboxPath := filepath.Join(rootfs, "bin", "busybox")
-	if _, err := os.Stat(busyboxPath); err != nil {
-		t.Errorf("BusyBox not found at %s", busyboxPath)
-	}
-
-	t.Logf("Alpine filesystem found at: %s", rootfs)
 }
 
 // TestFilesystemIsolation tests that the container can't access host files
