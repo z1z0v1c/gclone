@@ -16,12 +16,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	registry    = "registry-1.docker.io"
-	tag         = "latest"
-	authBaseURL = "https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull"
-)
-
 var (
 	repository string
 	token      string
@@ -37,15 +31,17 @@ var PullCmd = &cobra.Command{
 }
 
 func pull(c *cobra.Command, args []string) {
-	img := args[0]
+	imgName := args[0]
 
-	repository = filepath.Join("library", img)
+	img := NewImage(imgName)
 
-	imgPath := filepath.Join(os.Getenv("HOME"), relativeImagesPath, img)
+	repository = filepath.Join("library", imgName)
+
+	imgPath := filepath.Join(os.Getenv("HOME"), relativeImagesPath, imgName)
 	imgRoot := filepath.Join(imgPath, "rootfs")
 	cfgPath := filepath.Join(imgPath, ".config.json")
 
-	fmt.Printf("Pulling %q image from the %q repository in %q registry...\n", img, repository, registry)
+	fmt.Printf("Pulling %q image from the %q repository in %q registry...\n", img.Name, repository, registry)
 
 	must(authenticate(), "Authentication failed")
 
