@@ -102,16 +102,10 @@ func (c *Container) runParentProcess() {
 	}
 }
 
-func (c *Container) runChildProcess() {
-	// Unshare the mount namespace to isolate mounts from host
-	must(syscall.Unshare(syscall.CLONE_NEWNS), "Unshare mount namespace")
-
-	// Make all mounts private to prevent mount propagation to parent namespace
-	must(syscall.Mount("", "/", "", syscall.MS_PRIVATE|syscall.MS_REC, ""), "Make mounts private")
-
-	// Set the hostname
-	must(syscall.Sethostname([]byte(c.Hostname)), "Set hostname")
-
+func (c *Container) runChildProcess() error {
+	if err := c.setupNamespaces(); err != nil {
+		return err
+	}
 	// Change to Alpine root directory
 	must(os.Chdir(c.ImgRoot), "Change dir")
 
@@ -151,6 +145,27 @@ func (c *Container) runChildProcess() {
 			fatalf("Error: %v", err)
 		}
 	}
+
+	return nil
+}
+
+func (c *Container) setupNamespaces() error {
+	// Unshare the mount namespace to isolate mounts from host
+	if err := syscall.Unshare(syscall.CLONE_NEWNS); err != nil {
+		return fmt.Errorf("failed to unshare mount namespace: %v", err)
+	}
+
+	// Make all mounts private to prevent mount propagation to parent namespace
+	if err := syscall.Mount("", "/", "", syscall.MS_PRIVATE|syscall.MS_REC, ""); err != nil {
+		return fmt.Errorf("failed to make mounts private: %v", err)
+	}
+
+	// Set the hostname
+	if err := syscall.Sethostname([]byte(c.Hostname)); err != nil {
+		return fmt.Errorf("failed to set hostname: %v", err)
+	}
+
+	return nil
 }
 
 // setMinEnv sets minimal required environment variables
