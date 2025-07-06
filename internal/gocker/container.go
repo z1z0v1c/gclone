@@ -111,11 +111,10 @@ func (c *Container) runChildProcess() error {
 		return err
 	}
 
-	must(os.MkdirAll("/proc", 0555), "Make proc dir")
-
-	// Mount proc dir inside rootfs
-	must(syscall.Mount("proc", "/proc", "proc", 0, ""), "Mount proc dir")
-	defer syscall.Unmount("/proc", 0)
+	if err := c.mountProc(); err != nil {
+		return err
+	}
+	defer c.unmountProc()
 
 	// Create the command
 	cmd := exec.Command(c.Cmd, c.Args...)
@@ -178,10 +177,29 @@ func (c *Container) setupFilesystem() error {
 	}
 
 	if err := os.Chdir(c.WorkingDir); err != nil {
-		fmt.Printf("Warning: failed to chdir to working dir: %v\n", err)
+		fmt.Printf("WARNING: failed to chdir to working dir: %v\n", err)
 	}
 
 	return nil
+}
+
+func (c *Container) mountProc() error {
+	if err := os.MkdirAll("/proc", 0555); err != nil {
+		return fmt.Errorf("failed to create proc dir: %v", err)
+	}
+
+	// Mount proc dir inside rootfs
+	if err := syscall.Mount("proc", "/proc", "proc", 0, ""); err != nil {
+		return fmt.Errorf("failed to mount proc dir: %v", err)
+	}
+
+	return nil
+}
+
+func (c *Container) unmountProc() {
+	if err := syscall.Unmount("/proc", 0); err != nil {
+		fmt.Printf("WARNING: failed to unmount proc dir: %v\n", err)
+	}
 }
 
 // setMinEnv sets minimal required environment variables
@@ -205,7 +223,7 @@ func (c *Container) loadFromConfigFile(path string) error {
 
 	var cfg ImageConfig
 	if err = json.NewDecoder(cfgFile).Decode(&cfg); err != nil {
-		return fmt.Errorf( "failed to decode config file: %v", err)
+		return fmt.Errorf("failed to decode config file: %v", err)
 	}
 
 	c.Env = append(c.Env, cfg.Config.Env...)
