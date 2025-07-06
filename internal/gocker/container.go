@@ -106,16 +106,10 @@ func (c *Container) runChildProcess() error {
 	if err := c.setupNamespaces(); err != nil {
 		return err
 	}
-	// Change to Alpine root directory
-	must(os.Chdir(c.ImgRoot), "Change dir")
 
-	// Change root filesystem
-	must(syscall.Chroot("."), "Change root")
-
-	// Change to root directory in the new filesystem
-	must(os.Chdir("/"), "Change dir")
-
-	must(os.Chdir(c.WorkingDir), "Warning: failed to chdir to workingDir")
+	if err := c.setupFilesystem(); err != nil {
+		return err
+	}
 
 	must(os.MkdirAll("/proc", 0555), "Make proc dir")
 
@@ -160,9 +154,31 @@ func (c *Container) setupNamespaces() error {
 		return fmt.Errorf("failed to make mounts private: %v", err)
 	}
 
-	// Set the hostname
 	if err := syscall.Sethostname([]byte(c.Hostname)); err != nil {
 		return fmt.Errorf("failed to set hostname: %v", err)
+	}
+
+	return nil
+}
+
+func (c *Container) setupFilesystem() error {
+	// Change dir to image root directory
+	if err := os.Chdir(c.ImgRoot); err != nil {
+		return fmt.Errorf("failed to change dir: %v", err)
+	}
+
+	// Change root filesystem
+	if err := syscall.Chroot("."); err != nil {
+		return fmt.Errorf("failed to change root: %v", err)
+	}
+
+	// Change dir to root directory in the new filesystem
+	if err := os.Chdir("/"); err != nil {
+		return fmt.Errorf("failed to change dir: %v", err)
+	}
+
+	if err := os.Chdir(c.WorkingDir); err != nil {
+		fmt.Printf("Warning: failed to chdir to working dir: %v\n", err)
 	}
 
 	return nil
