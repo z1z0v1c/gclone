@@ -1,7 +1,6 @@
 package gocker
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,8 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 )
-
-const relativeImagesPath = ".local/share/gocker/images/"
 
 var RunCmd = &cobra.Command{
 	Use:                "run image command [flags]",
@@ -30,23 +27,10 @@ func must(err error, errMsg string) {
 }
 
 func run(c *cobra.Command, args []string) {
-	// Extract image name, subcommand and its arguments
-	img, subcmd, argz := args[0], args[1], args[2:]
-
-	imgRoot := filepath.Join(os.Getenv("HOME"), relativeImagesPath, img, "rootfs")
-	cfgPath := filepath.Join(os.Getenv("HOME"), relativeImagesPath, img, ".config.json")
-
-	cfgFile, err := os.Open(cfgPath)
+	cnt, err := NewContainer(args)
 	if err != nil {
-		fatalf("failed to open config file: %s", cfgPath)
+		fatalf("Error during container creation: %v", err)
 	}
-	defer cfgFile.Close()
-
-	var cfg ImageConfig
-	must(json.NewDecoder(cfgFile).Decode(&cfg), "failed to decode config file")
-
-	// Prepare clean container environment
-	env, workDir := prepareContainerEnv(&cfg)
 
 	if os.Getenv("IS_CHILD") == "1" {
 		// Unshare the mount namespace to isolate mounts from host
@@ -59,7 +43,7 @@ func run(c *cobra.Command, args []string) {
 		must(syscall.Sethostname([]byte("container")), "Set hostname")
 
 		// Change to Alpine root directory
-		must(os.Chdir(imgRoot), "Change dir")
+		must(os.Chdir(cnt.ImgRoot), "Change dir")
 
 		// Change root filesystem
 		must(syscall.Chroot("."), "Change root")
@@ -67,7 +51,7 @@ func run(c *cobra.Command, args []string) {
 		// Change to root directory in the new filesystem
 		must(os.Chdir("/"), "Change dir")
 
-		must(os.Chdir(workDir), "Warning: failed to chdir to workingDir")
+		must(os.Chdir(cnt.Cfg.WorkDir), "Warning: failed to chdir to workingDir")
 
 		must(os.MkdirAll("/proc", 0555), "Make proc dir")
 
@@ -76,15 +60,15 @@ func run(c *cobra.Command, args []string) {
 		defer syscall.Unmount("/proc", 0)
 
 		// Create the command
-		cmd := exec.Command(subcmd, argz...)
+		cmd := exec.Command(cnt.Cmd, cnt.Args...)
 
 		// Forward all standard streams exactly as they are
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 
-		cmd.Env = env
-		cmd.Dir = workDir
+		cmd.Env = cnt.Cfg.Env
+		cmd.Dir = cnt.Cfg.WorkDir
 
 		// Execute command
 		if err := cmd.Run(); err != nil {
@@ -108,7 +92,7 @@ func run(c *cobra.Command, args []string) {
 	cmd := exec.Command("/proc/self/exe", os.Args[1:]...)
 
 	// Set IS_CHILD environment variable
-	cmd.Env = append(env, "IS_CHILD=1")
+	cmd.Env = append(cnt.Cfg.Env, "IS_CHILD=1")
 
 	// Forward all standard streams exactly as they are
 	cmd.Stdin = os.Stdin
@@ -130,7 +114,7 @@ func run(c *cobra.Command, args []string) {
 
 	// Re-execute command
 	if err := cmd.Run(); err != nil {
-		cleanupCgroups() // os.Exit skips deferd calls
+		cleanupCgroups() // os.Exit skips defered calls
 
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			os.Exit(exitErr.ExitCode())
@@ -138,26 +122,6 @@ func run(c *cobra.Command, args []string) {
 			fatalf("Error: %v", err)
 		}
 	}
-}
-
-// prepareContainerEnv sets the environment variables and working directory
-// for a container process based on the provided image configuration.
-func prepareContainerEnv(cfg *ImageConfig) ([]string, string) {
-	var env []string
-	workDir := "/"
-
-	// Set minimal required environment variables
-	env = append(env, "HOME=/root")
-	env = append(env, "USER=root")
-	env = append(env, "SHELL=/bin/sh")
-	env = append(env, "TERM=xterm")
-
-	env = append(env, cfg.Config.Env...)
-	if cfg.Config.WorkingDir != "" {
-		workDir = cfg.Config.WorkingDir
-	}
-
-	return env, workDir
 }
 
 // setupCgroups creates and configures a new v2 cgroup for the container process
