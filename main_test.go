@@ -137,8 +137,8 @@ func TestNamespaceIsolation(t *testing.T) {
 	}
 
 	containerHostname := strings.TrimSpace(string(output))
-	if containerHostname != "container" {
-		t.Errorf("Expected container hostname 'container', got %q", containerHostname)
+	if containerHostname != "alpine-container" {
+		t.Errorf("Expected container hostname 'alpine-container', got %q", containerHostname)
 	}
 
 	// Verify host hostname unchanged
