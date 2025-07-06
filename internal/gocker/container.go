@@ -55,16 +55,26 @@ func NewContainer(args []string) (*Container, error) {
 }
 
 func (c *Container) run() {
+	var err error
+
 	if os.Getenv("IS_CHILD") == "1" {
-		c.runChildProcess()
+		err = c.runChildProcess()
 	} else {
-		c.runParentProcess()
+		err = c.runParentProcess()
+	}
+
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			os.Exit(exitErr.ExitCode())
+		} else {
+			fatalf("Error: %v", err)
+		}
 	}
 }
 
-func (c *Container) runParentProcess() {
+func (c *Container) runParentProcess() error {
 	c.setupCgroup()
-	defer c.cleanupCgroups()
+	defer c.cleanupCgroup()
 
 	// Recreate the command for the child process
 	cmd := exec.Command("/proc/self/exe", os.Args[1:]...)
@@ -73,9 +83,7 @@ func (c *Container) runParentProcess() {
 	cmd.Env = append(c.Env, "IS_CHILD=1")
 
 	// Forward all standard streams exactly as they are
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 
 	// Use a new UTS. PID and Mount namespaces
 	cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -90,16 +98,7 @@ func (c *Container) runParentProcess() {
 		GidMappingsEnableSetgroups: false, // disable setgroups to avoid EPERM
 	}
 
-	// Re-execute command
-	if err := cmd.Run(); err != nil {
-		c.cleanupCgroups() // os.Exit skips defered calls
-
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			os.Exit(exitErr.ExitCode())
-		} else {
-			fatalf("Error: %v", err)
-		}
-	}
+	return cmd.Run()
 }
 
 func (c *Container) runChildProcess() error {
@@ -120,26 +119,12 @@ func (c *Container) runChildProcess() error {
 	cmd := exec.Command(c.Cmd, c.Args...)
 
 	// Forward all standard streams exactly as they are
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 
-	cmd.Env = c.Env
-	cmd.Dir = c.WorkingDir
+	// Set command's env and dir
+	cmd.Env, cmd.Dir = c.Env, c.WorkingDir
 
-	// Execute command
-	if err := cmd.Run(); err != nil {
-		// Clean up before exit
-		syscall.Unmount("/proc", 0)
-
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			os.Exit(exitErr.ExitCode())
-		} else {
-			fatalf("Error: %v", err)
-		}
-	}
-
-	return nil
+	return cmd.Run()
 }
 
 func (c *Container) setupNamespaces() error {
@@ -260,8 +245,8 @@ func (c *Container) setupCgroup() {
 		"Failed to add process to cgroup")
 }
 
-// cleanupCgroups removes the custom cgroup created for the container process
-func (c *Container) cleanupCgroups() {
+// cleanupCgroup removes the custom cgroup created for the container process
+func (c *Container) cleanupCgroup() {
 	rootProcs := filepath.Join(cgroupsRoot, "cgroup.procs")
 	selfPid := []byte(strconv.Itoa(os.Getpid()))
 
