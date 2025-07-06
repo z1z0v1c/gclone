@@ -12,8 +12,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const relativeImagesPath = ".local/share/gocker/images/"
+
 var RunCmd = &cobra.Command{
-	Use:                "run [image] [command]",
+	Use:                "run image command [flags]",
 	Short:              "Run a container from a downloaded image",
 	DisableFlagParsing: true,
 	Args:               cobra.MinimumNArgs(1),
@@ -138,6 +140,8 @@ func run(c *cobra.Command, args []string) {
 	}
 }
 
+// prepareContainerEnv sets the environment variables and working directory
+// for a container process based on the provided image configuration.
 func prepareContainerEnv(cfg *ImageConfig) ([]string, string) {
 	var env []string
 	workDir := "/"
@@ -156,6 +160,7 @@ func prepareContainerEnv(cfg *ImageConfig) ([]string, string) {
 	return env, workDir
 }
 
+// setupCgroups creates and configures a new v2 cgroup for the container process
 func setupCgroups() {
 	cgroupRoot := "/sys/fs/cgroup"
 	cgroupName := fmt.Sprintf("gocker%d", os.Getpid())
@@ -163,37 +168,37 @@ func setupCgroups() {
 
 	must(os.MkdirAll(cgroupPath, 0755), "Failed to create cgroup v2 path")
 
-	// Set memory limit in bytes
-	must(
-		os.WriteFile(filepath.Join(cgroupPath, "memory.max"), []byte("50M"), 0644),
-		"Failed to set memory limit",
-	)
+	// Set container's memory limit
+	memoryMaxFile := filepath.Join(cgroupPath, "memory.max")
+	must(os.WriteFile(memoryMaxFile, []byte("50M"), 0644), "Failed to set memory limit")
 
-	// Set CPU limit (20%)
-	must(
-		// Format: "<max> <period>" where max and period are in microseconds
-		os.WriteFile(filepath.Join(cgroupPath, "cpu.max"), []byte("20000 100000"), 0644),
-		"Failed to set CPU limit",
-	)
+	// Set container's CPU limit (20%)
+	// Format: "<max> <period>" where max and period are in microseconds
+	cpuMaxFile := filepath.Join(cgroupPath, "cpu.max")
+	must(os.WriteFile(cpuMaxFile, []byte("20000 100000"), 0644), "Failed to set CPU limit")
 
 	// Add current process to the cgroup
-	must(
-		os.WriteFile(filepath.Join(cgroupPath, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0644),
-		"Failed to add process to cgroup",
-	)
+	cgroupProcsFile := filepath.Join(cgroupPath, "cgroup.procs")
+	must(os.WriteFile(cgroupProcsFile, []byte(strconv.Itoa(os.Getpid())), 0644),
+		"Failed to add process to cgroup")
 }
 
+// cleanupCgroups removes the custom cgroup created for the container process
 func cleanupCgroups() {
 	cgroupRoot := "/sys/fs/cgroup"
 	cgroupName := fmt.Sprintf("gocker%d", os.Getpid())
 	cgroupPath := filepath.Join(cgroupRoot, cgroupName)
 
-	// Move the current process back to the root cgroup
 	rootProcs := filepath.Join(cgroupRoot, "cgroup.procs")
 	selfPid := []byte(strconv.Itoa(os.Getpid()))
 
-	must(os.WriteFile(rootProcs, selfPid, 0644), "Warning: Failed to move process out of cgroup")
+	// Move the current process back to the root cgroup
+	if err := os.WriteFile(rootProcs, selfPid, 0644); err != nil {
+		fmt.Printf("Warning: Failed to move process out of cgroup: %v\n", err)
+	}
 
 	// Now it's safe to remove the cgroup directory
-	must(os.RemoveAll(cgroupPath), "Warning: Failed to remove cgroup directory")
+	if err := os.RemoveAll(cgroupPath); err != nil {
+		fmt.Printf("Warning: Failed to remove cgroup directory: %v\n", err)
+	}
 }

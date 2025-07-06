@@ -1,7 +1,5 @@
 package gocker
 
-const relativeImagesPath = ".local/share/gocker/images/"
-
 type AuthResponse struct {
 	Token string `json:"token"`
 }

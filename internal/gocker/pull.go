@@ -40,7 +40,10 @@ func pull(c *cobra.Command, args []string) {
 	img := args[0]
 
 	repository = filepath.Join("library", img)
+
 	imgPath := filepath.Join(os.Getenv("HOME"), relativeImagesPath, img)
+	imgRoot := filepath.Join(imgPath, "rootfs")
+	cfgPath := filepath.Join(imgPath, ".config.json")
 
 	fmt.Printf("Pulling %q image from the %q repository in %q registry...\n", img, repository, registry)
 
@@ -49,15 +52,14 @@ func pull(c *cobra.Command, args []string) {
 	var mf Manifest
 	must(fetchManifest(&mf), "Failed to fetch manifest")
 
-	must(os.RemoveAll(imgPath), "Failed to remove existing rootfs")
+	must(os.RemoveAll(imgPath), "Failed to remove existing image")
 
 	// Create rootfs directory
-	must(os.MkdirAll(filepath.Join(imgPath, "rootfs"), 0755), "Failed to create rootfs directory")
+	must(os.MkdirAll(imgRoot, 0755), "Failed to create image rootfs directory")
 
 	for i, layer := range mf.Layers {
 		fmt.Printf("Downloading layer %d/%d: %s\n", i+1, len(mf.Layers), layer.Digest)
 
-		imgRoot := filepath.Join(imgPath, "rootfs")
 		must(downloadAndExtractLayer(imgRoot, layer.Digest), "Failed to download layer")
 	}
 
@@ -72,7 +74,6 @@ func pull(c *cobra.Command, args []string) {
 	}
 
 	// Save config data
-	cfgPath := filepath.Join(imgPath, ".config.json")
 	must(os.WriteFile(cfgPath, cfgData, 0644), "Failed to write config")
 
 	fmt.Printf("Image %q pulled successfully to %q\n", args[0], imgPath)
