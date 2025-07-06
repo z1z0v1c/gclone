@@ -64,6 +64,7 @@ func (c *Container) run() {
 	}
 
 	if err != nil {
+		// Handle exit error for proper exit code propagation
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			os.Exit(exitErr.ExitCode())
 		} else {
@@ -227,22 +228,31 @@ func (c *Container) loadFromConfigFile(path string) error {
 }
 
 // setupCgroup creates and configures a new v2 cgroup for the container process
-func (c *Container) setupCgroup() {
-	must(os.MkdirAll(c.CgroupPath, 0755), "Failed to create cgroup v2 path")
+func (c *Container) setupCgroup() error {
+	if err := os.MkdirAll(c.CgroupPath, 0755); err != nil {
+		return fmt.Errorf("failed to create cgroup v2 path: %v", err)
+	}
 
 	// Set container's memory limit
 	memoryMaxFile := filepath.Join(c.CgroupPath, "memory.max")
-	must(os.WriteFile(memoryMaxFile, []byte("50M"), 0644), "Failed to set memory limit")
+	if err := os.WriteFile(memoryMaxFile, []byte("50M"), 0644); err != nil {
+		return fmt.Errorf("failed to set memory limit: %v", err)
+	}
 
 	// Set container's CPU limit (20%)
 	// Format: "<max> <period>" where max and period are in microseconds
 	cpuMaxFile := filepath.Join(c.CgroupPath, "cpu.max")
-	must(os.WriteFile(cpuMaxFile, []byte("20000 100000"), 0644), "Failed to set CPU limit")
+	if err := os.WriteFile(cpuMaxFile, []byte("20000 100000"), 0644); err != nil {
+		return fmt.Errorf("failed to set CPU limit: %v", err)
+	}
 
 	// Add current process to the cgroup
 	cgroupProcsFile := filepath.Join(c.CgroupPath, "cgroup.procs")
-	must(os.WriteFile(cgroupProcsFile, []byte(strconv.Itoa(os.Getpid())), 0644),
-		"Failed to add process to cgroup")
+	if err := os.WriteFile(cgroupProcsFile, []byte(strconv.Itoa(os.Getpid())), 0644); err != nil {
+		return fmt.Errorf("failed to add process to cgroup: %v", err)
+	}
+
+	return nil
 }
 
 // cleanupCgroup removes the custom cgroup created for the container process
