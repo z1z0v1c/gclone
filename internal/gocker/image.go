@@ -30,7 +30,7 @@ type Image struct {
 	Token      string
 
 	Manifest *Manifest
-	Config   *ImageConfig
+	Cfg      *ImageConfig
 }
 
 func NewImage(name string) *Image {
@@ -63,12 +63,8 @@ func (i *Image) pull() error {
 		return err
 	}
 
-	if err := os.RemoveAll(i.Path); err != nil {
-		return err
-	}
-
 	// Create rootfs directory
-	if err := os.MkdirAll(i.Root, 0755); err != nil {
+	if err := i.mkdirRootfs(); err != nil {
 		return err
 	}
 
@@ -86,7 +82,7 @@ func (i *Image) pull() error {
 		return err
 	}
 
-	cfgData, err := json.MarshalIndent(i.Config, "", "  ")
+	cfgData, err := json.MarshalIndent(i.Cfg, "", "  ")
 	if err != nil {
 		fatalf("Failed to marshal config: %v", err)
 	}
@@ -348,10 +344,23 @@ func (i *Image) fetchConfig(digest string) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to fetch config with status: %d", resp.StatusCode)
 	}
-	
-	i.Config = &ImageConfig{}
-	if err := json.NewDecoder(resp.Body).Decode(i.Config); err != nil {
+
+	i.Cfg = &ImageConfig{}
+	if err := json.NewDecoder(resp.Body).Decode(i.Cfg); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (i *Image) mkdirRootfs() error {
+	if err := os.RemoveAll(i.Path); err != nil {
+		return fmt.Errorf("failed to remove existing image dir: %v", err)
+	}
+
+	// Create rootfs directory
+	if err := os.MkdirAll(i.Root, 0755); err != nil {
+		return fmt.Errorf("failed to create image rootfs dir: %v", err)
 	}
 
 	return nil
