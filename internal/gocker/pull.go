@@ -9,7 +9,6 @@ import (
 
 var (
 	repository string
-	token      string
 )
 
 var PullCmd = &cobra.Command{

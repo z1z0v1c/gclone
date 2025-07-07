@@ -27,7 +27,7 @@ type Image struct {
 	Root       string
 	CfgPath    string
 	Repository string
-	// Token      string
+	Token      string
 
 	Manifest *Manifest
 	Config   *ImageConfig
@@ -115,8 +115,7 @@ func (i *Image) authenticate() error {
 
 	fmt.Printf("Authentication successful, token length: %d\n", len(authResp.Token))
 
-	// i.Token = authResp.Token
-	token = authResp.Token
+	i.Token = authResp.Token
 
 	return nil
 }
@@ -131,7 +130,7 @@ func (i *Image) fetchManifest() error {
 		return err
 	}
 
-	setRequestHeaders(req)
+	i.setRequestHeaders(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -174,8 +173,8 @@ func (i *Image) fetchManifest() error {
 	return nil
 }
 
-func setRequestHeaders(req *http.Request) {
-	req.Header.Set("Authorization", "Bearer "+token)
+func (i *Image) setRequestHeaders(req *http.Request) {
+	req.Header.Set("Authorization", "Bearer "+i.Token)
 	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 	req.Header.Set("User-Agent", "gocker/1.0")
 }
@@ -190,7 +189,7 @@ func (i *Image) fetchManifestByDigest(digest string) error {
 		return err
 	}
 
-	setRequestHeaders(req)
+	i.setRequestHeaders(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -217,7 +216,7 @@ func (i *Image) downloadAndExtractLayer(imgRoot, digest string) error {
 		return err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+i.Token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -328,7 +327,7 @@ func (i *Image) fetchConfig(config *ImageConfig, digest string) error {
 		return err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+i.Token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
