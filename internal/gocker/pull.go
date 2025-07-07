@@ -8,7 +8,7 @@ import (
 )
 
 var PullCmd = &cobra.Command{
-	Use:                   "pull [image]",
+	Use:                   "pull image",
 	Short:                 "Pull an image from Docker Hub",
 	Long:                  "Pull an image from Docker Hub",
 	DisableFlagsInUseLine: true,

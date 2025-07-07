@@ -15,9 +15,16 @@ import (
 )
 
 const (
-	registry    = "registry-1.docker.io"
-	tag         = "latest"
-	authBaseURL = "https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull"
+	registry        = "registry-1.docker.io"
+	authBaseURL     = "https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull"
+	manifestBaseURL = "https://%s/v2/%s/manifests/"
+	blobsBaseURL    = "https://%s/v2/%s/blobs/"
+)
+
+var (
+	authURL     string
+	manifestURL string
+	blobsURL    string
 )
 
 type Image struct {
@@ -34,16 +41,21 @@ type Image struct {
 }
 
 func NewImage(name string) *Image {
-	home := os.Getenv("HOME")
+	tag := "latest"
+	homeDir := os.Getenv("HOME")
 
-	imgPath := filepath.Join(home, relativeImagesPath, name)
+	imgPath := filepath.Join(homeDir, relativeImagesPath, name)
 	imgRoot := filepath.Join(imgPath, "rootfs")
 	cfgPath := filepath.Join(imgPath, ".config.json")
 	repository := filepath.Join("library", name)
 
+	authURL = fmt.Sprintf(authBaseURL, repository)
+	manifestURL = fmt.Sprintf(manifestBaseURL, registry, repository)
+	blobsURL = fmt.Sprintf(blobsBaseURL, registry, repository)
+
 	return &Image{
 		Name:       name,
-		Tag:        "latest",
+		Tag:        tag,
 		Path:       imgPath,
 		Root:       imgRoot,
 		CfgPath:    cfgPath,
@@ -82,9 +94,6 @@ func (i *Image) pull() error {
 }
 
 func (i *Image) authenticate() error {
-	// For Docker Hub, we need to get a token from auth.docker.io
-	authURL := fmt.Sprintf(authBaseURL, i.Repository)
-
 	fmt.Printf("Authenticating with: %s\n", authURL)
 
 	resp, err := http.Get(authURL)
@@ -110,11 +119,9 @@ func (i *Image) authenticate() error {
 }
 
 func (i *Image) fetchManifest() error {
-	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, i.Repository, i.Tag)
+	fmt.Printf("Fetching manifest from: %s\n", manifestURL+i.Tag)
 
-	fmt.Printf("Fetching manifest from: %s\n", url)
-
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", manifestURL+i.Tag, nil)
 	if err != nil {
 		return err
 	}
@@ -170,11 +177,9 @@ func (i *Image) setRequestHeaders(req *http.Request) {
 }
 
 func (i *Image) fetchManifestByDigest(digest string) error {
-	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, i.Repository, digest)
+	fmt.Printf("Fetching platform-specific manifest: %s", digest)
 
-	fmt.Printf("Fetching platform-specific manifest: %s", url)
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, manifestURL+digest, nil)
 	if err != nil {
 		return err
 	}
@@ -211,9 +216,7 @@ func (i *Image) downloadAndExtract() error {
 }
 
 func (i *Image) downloadAndExtractLayer(digest string) error {
-	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, i.Repository, digest)
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, blobsURL+digest, nil)
 	if err != nil {
 		return err
 	}
@@ -326,9 +329,7 @@ func (i *Image) fetchConfig() error {
 
 	fmt.Printf("Downloading config: %s\n", digest)
 
-	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, i.Repository, digest)
-
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", blobsURL+digest, nil)
 	if err != nil {
 		return err
 	}
