@@ -35,44 +35,10 @@ func pull(c *cobra.Command, args []string) {
 
 	img := NewImage(imgName)
 
-	repository = filepath.Join("library", imgName)
-
-	imgPath := filepath.Join(os.Getenv("HOME"), relativeImagesPath, imgName)
-	imgRoot := filepath.Join(imgPath, "rootfs")
-	cfgPath := filepath.Join(imgPath, ".config.json")
-
-	fmt.Printf("Pulling %q image from the %q repository in %q registry...\n", img.Name, repository, registry)
-
-	must(authenticate(), "Authentication failed")
-
-	var mf Manifest
-	must(fetchManifest(&mf), "Failed to fetch manifest")
-
-	must(os.RemoveAll(imgPath), "Failed to remove existing image")
-
-	// Create rootfs directory
-	must(os.MkdirAll(imgRoot, 0755), "Failed to create image rootfs directory")
-
-	for i, layer := range mf.Layers {
-		fmt.Printf("Downloading layer %d/%d: %s\n", i+1, len(mf.Layers), layer.Digest)
-
-		must(downloadAndExtractLayer(imgRoot, layer.Digest), "Failed to download layer")
-	}
-
-	fmt.Printf("Downloading config: %s\n", mf.Config.Digest)
-
-	var cfg ImageConfig
-	must(fetchConfig(&cfg, mf.Config.Digest), "Failed to fetch config")
-
-	cfgData, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		fatalf("Failed to marshal config: %v", err)
-	}
-
-	// Save config data
-	must(os.WriteFile(cfgPath, cfgData, 0644), "Failed to write config")
-
-	fmt.Printf("Image %q pulled successfully to %q\n", args[0], imgPath)
+	if err := img.pull(); err != nil {
+		fmt.Printf("Error while pulling %q image: %v", img.Name, err)
+		os.Exit(1)
+	} 
 }
 
 func fatalf(format string, a ...any) {
@@ -84,34 +50,6 @@ func setRequestHeaders(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 	req.Header.Set("User-Agent", "gocker/1.0")
-}
-
-func authenticate() error {
-	// For Docker Hub, we need to get a token from auth.docker.io
-	authURL := fmt.Sprintf(authBaseURL, repository)
-
-	fmt.Printf("Authenticating with: %s\n", authURL)
-
-	resp, err := http.Get(authURL)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("authentication failed with status: %d", resp.StatusCode)
-	}
-
-	var authResp AuthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
-		return err
-	}
-
-	fmt.Printf("Authentication successful, token length: %d\n", len(authResp.Token))
-
-	token = authResp.Token
-
-	return nil
 }
 
 func fetchManifest(mf *Manifest) error {
