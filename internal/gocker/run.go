@@ -1,8 +1,6 @@
 package gocker
 
 import (
-	"os"
-
 	"github.com/spf13/cobra"
 )
 
@@ -12,13 +10,6 @@ var RunCmd = &cobra.Command{
 	DisableFlagParsing: true,
 	Args:               cobra.MinimumNArgs(1),
 	Run:                run,
-}
-
-func must(err error, errMsg string) {
-	if err != nil {
-		fatalf(errMsg+": %v\n", err)
-		os.Exit(1)
-	}
 }
 
 func run(c *cobra.Command, args []string) {

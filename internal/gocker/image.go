@@ -63,21 +63,29 @@ func (i *Image) pull() error {
 		return err
 	}
 
-	must(os.RemoveAll(i.Path), "Failed to remove existing image")
+	if err := os.RemoveAll(i.Path); err != nil {
+		return err
+	}
 
 	// Create rootfs directory
-	must(os.MkdirAll(i.Root, 0755), "Failed to create image rootfs directory")
+	if err := os.MkdirAll(i.Root, 0755); err != nil {
+		return err
+	}
 
 	for j, layer := range i.Manifest.Layers {
 		fmt.Printf("Downloading layer %d/%d: %s\n", j+1, len(i.Manifest.Layers), layer.Digest)
 
-		must(i.downloadAndExtractLayer(i.Root, layer.Digest), "Failed to download layer")
+		if err := i.downloadAndExtractLayer(i.Root, layer.Digest); err != nil {
+			return err
+		}
 	}
 
 	fmt.Printf("Downloading config: %s\n", i.Manifest.Config.Digest)
 
 	var cfg ImageConfig
-	must(i.fetchConfig(&cfg, i.Manifest.Config.Digest), "Failed to fetch config")
+	if err := i.fetchConfig(&cfg, i.Manifest.Config.Digest); err != nil {
+		return err
+	}
 
 	cfgData, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
@@ -85,7 +93,9 @@ func (i *Image) pull() error {
 	}
 
 	// Save config data
-	must(os.WriteFile(i.CfgPath, cfgData, 0644), "Failed to write config")
+	if err := os.WriteFile(i.CfgPath, cfgData, 0644); err != nil {
+		return err
+	}
 
 	fmt.Printf("Image %q pulled successfully to %q\n", i.Name, i.Path)
 
