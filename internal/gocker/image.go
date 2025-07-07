@@ -72,17 +72,7 @@ func (i *Image) pull() error {
 		return err
 	}
 
-	if err := i.fetchConfig(i.Manifest.Config.Digest); err != nil {
-		return err
-	}
-
-	cfgData, err := json.MarshalIndent(i.Cfg, "", "  ")
-	if err != nil {
-		fatalf("Failed to marshal config: %v", err)
-	}
-
-	// Save config data
-	if err := os.WriteFile(i.CfgPath, cfgData, 0644); err != nil {
+	if err := i.fetchConfig(); err != nil {
 		return err
 	}
 
@@ -331,8 +321,10 @@ func (i *Image) extractLayer(tr *tar.Reader, imgRoot string) error {
 	return nil
 }
 
-func (i *Image) fetchConfig(digest string) error {
-	fmt.Printf("Downloading config: %s\n", i.Manifest.Config.Digest)
+func (i *Image) fetchConfig() error {
+	digest := i.Manifest.Config.Digest
+
+	fmt.Printf("Downloading config: %s\n", digest)
 
 	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, i.Repository, digest)
 
@@ -356,6 +348,16 @@ func (i *Image) fetchConfig(digest string) error {
 	i.Cfg = &ImageConfig{}
 	if err := json.NewDecoder(resp.Body).Decode(i.Cfg); err != nil {
 		return err
+	}
+
+	cfgData, err := json.MarshalIndent(i.Cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %v", err)
+	}
+
+	// Save config data
+	if err := os.WriteFile(i.CfgPath, cfgData, 0644); err != nil {
+		return fmt.Errorf("failed to save config file: %v", err)
 	}
 
 	return nil
