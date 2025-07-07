@@ -46,34 +46,6 @@ func fatalf(format string, a ...any) {
 	os.Exit(1)
 }
 
-func fetchManifestByDigest(mf *Manifest, digest string) error {
-	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, digest)
-
-	fmt.Printf("Fetching platform-specific manifest: %s", url)
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return err
-	}
-
-	setRequestHeaders(req)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to fetch manifest by digest, status: %d", resp.StatusCode)
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(mf); err != nil {
-		return err
-	}
-
-	return nil
-}
 
 func downloadAndExtractLayer(imgRoot, digest string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, digest)

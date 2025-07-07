@@ -152,7 +152,7 @@ func (i *Image) fetchManifest() error {
 			if m.Platform.OS == "linux" && m.Platform.Architecture == "amd64" {
 				fmt.Printf("Selected manifest digest for linux/amd64: %s", m.Digest)
 
-				return fetchManifestByDigest(i.Manifest, m.Digest)
+				return i.fetchManifestByDigest(m.Digest)
 			}
 		}
 
@@ -172,4 +172,33 @@ func setRequestHeaders(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 	req.Header.Set("User-Agent", "gocker/1.0")
+}
+
+func (i *Image) fetchManifestByDigest(digest string) error {
+	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, digest)
+
+	fmt.Printf("Fetching platform-specific manifest: %s", url)
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+
+	setRequestHeaders(req)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to fetch manifest by digest, status: %d", resp.StatusCode)
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(i.Manifest); err != nil {
+		return err
+	}
+
+	return nil
 }
