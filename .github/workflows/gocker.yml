@@ -19,7 +19,7 @@ jobs:
         go-version: '1.24'
 
     - name: Build
-      run: go build -v
+      run: go build ./cmd/gocker
 
     # Can not run tests after User namespace isolation.
     # GitHub Actions runners have User namespaces disabled for security reasons.
