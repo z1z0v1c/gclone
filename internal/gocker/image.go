@@ -68,15 +68,9 @@ func (i *Image) pull() error {
 		return err
 	}
 
-	for j, layer := range i.Manifest.Layers {
-		fmt.Printf("Downloading layer %d/%d: %s\n", j+1, len(i.Manifest.Layers), layer.Digest)
-
-		if err := i.downloadAndExtractLayer(i.Root, layer.Digest); err != nil {
-			return err
-		}
+	if err := i.downloadAndExtract(); err != nil {
+		return err
 	}
-
-	fmt.Printf("Downloading config: %s\n", i.Manifest.Config.Digest)
 
 	if err := i.fetchConfig(i.Manifest.Config.Digest); err != nil {
 		return err
@@ -214,7 +208,19 @@ func (i *Image) fetchManifestByDigest(digest string) error {
 	return nil
 }
 
-func (i *Image) downloadAndExtractLayer(imgRoot, digest string) error {
+func (i *Image) downloadAndExtract() error {
+	for j, layer := range i.Manifest.Layers {
+		fmt.Printf("Downloading layer %d/%d: %s\n", j+1, len(i.Manifest.Layers), layer.Digest)
+
+		if err := i.downloadAndExtractLayer(layer.Digest); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (i *Image) downloadAndExtractLayer(digest string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, i.Repository, digest)
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -249,7 +255,7 @@ func (i *Image) downloadAndExtractLayer(imgRoot, digest string) error {
 	tr := tar.NewReader(gr)
 
 	// Extract files
-	i.extractLayer(tr, imgRoot)
+	i.extractLayer(tr, i.Root)
 
 	// Verify the digest
 	actualDigest := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
@@ -326,6 +332,8 @@ func (i *Image) extractLayer(tr *tar.Reader, imgRoot string) error {
 }
 
 func (i *Image) fetchConfig(digest string) error {
+	fmt.Printf("Downloading config: %s\n", i.Manifest.Config.Digest)
+
 	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, i.Repository, digest)
 
 	req, err := http.NewRequest("GET", url, nil)
