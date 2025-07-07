@@ -24,7 +24,7 @@ func must(err error, errMsg string) {
 func run(c *cobra.Command, args []string) {
 	cnt, err := NewContainer(args)
 	if err != nil {
-		fatalf("Error during container creation: %v", err)
+		fatalf("Error during container creation: %v\n", err)
 	}
 
 	cnt.run()

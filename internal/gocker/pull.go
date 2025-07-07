@@ -36,73 +36,14 @@ func pull(c *cobra.Command, args []string) {
 	img := NewImage(imgName)
 
 	if err := img.pull(); err != nil {
-		fmt.Printf("Error while pulling %q image: %v", img.Name, err)
+		fmt.Printf("Error while pulling %q image: %v\n", img.Name, err)
 		os.Exit(1)
-	} 
+	}
 }
 
 func fatalf(format string, a ...any) {
 	fmt.Printf(format, a...)
 	os.Exit(1)
-}
-
-func setRequestHeaders(req *http.Request) {
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
-	req.Header.Set("User-Agent", "gocker/1.0")
-}
-
-func fetchManifest(mf *Manifest) error {
-	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, tag)
-
-	fmt.Printf("Fetching manifest from: %s\n", url)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return err
-	}
-
-	setRequestHeaders(req)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to fetch manifest with status: %d", resp.StatusCode)
-	}
-
-	ctype := resp.Header.Get("Content-Type")
-
-	// Handle OCI Index (manifest list)
-	if ctype == "application/vnd.oci.image.index.v1+json" || ctype == "application/vnd.docker.distribution.manifest.list.v2+json" {
-		var index ManifestIndex
-		if err := json.NewDecoder(resp.Body).Decode(&index); err != nil {
-			return fmt.Errorf("error decoding manifest index: %w", err)
-		}
-
-		fmt.Printf("Received index, contains %d platform manifests\n", len(index.Manifests))
-
-		for _, m := range index.Manifests {
-			if m.Platform.OS == "linux" && m.Platform.Architecture == "amd64" {
-				fmt.Printf("Selected manifest digest for linux/amd64: %s", m.Digest)
-
-				return fetchManifestByDigest(mf, m.Digest)
-			}
-		}
-
-		return fmt.Errorf("no matching platform found in manifest index")
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(mf); err != nil {
-		return err
-	}
-
-	fmt.Printf("Found %d layers to download\n", len(mf.Layers))
-
-	return nil
 }
 
 func fetchManifestByDigest(mf *Manifest, digest string) error {
