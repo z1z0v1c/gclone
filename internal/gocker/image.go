@@ -1,11 +1,17 @@
 package gocker
 
 import (
+	"archive/tar"
+	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -65,13 +71,13 @@ func (i *Image) pull() error {
 	for j, layer := range i.Manifest.Layers {
 		fmt.Printf("Downloading layer %d/%d: %s\n", j+1, len(i.Manifest.Layers), layer.Digest)
 
-		must(downloadAndExtractLayer(i.Root, layer.Digest), "Failed to download layer")
+		must(i.downloadAndExtractLayer(i.Root, layer.Digest), "Failed to download layer")
 	}
 
 	fmt.Printf("Downloading config: %s\n", i.Manifest.Config.Digest)
 
 	var cfg ImageConfig
-	must(fetchConfig(&cfg, i.Manifest.Config.Digest), "Failed to fetch config")
+	must(i.fetchConfig(&cfg, i.Manifest.Config.Digest), "Failed to fetch config")
 
 	cfgData, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
@@ -197,6 +203,144 @@ func (i *Image) fetchManifestByDigest(digest string) error {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(i.Manifest); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (i *Image) downloadAndExtractLayer(imgRoot, digest string) error {
+	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, digest)
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to download layer with status: %d", resp.StatusCode)
+	}
+
+	// Verify digest
+	hasher := sha256.New()
+	reader := io.TeeReader(resp.Body, hasher)
+
+	// Create gzip reader
+	gr, err := gzip.NewReader(reader)
+	if err != nil {
+		return fmt.Errorf("failed to create gzip reader: %v", err)
+	}
+	defer gr.Close()
+
+	// Create tar reader
+	tr := tar.NewReader(gr)
+
+	// Extract files
+	i.extractLayer(tr, imgRoot)
+
+	// Verify the digest
+	actualDigest := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
+	if actualDigest != digest {
+		return fmt.Errorf("digest mismatch: expected %s, got %s", digest, actualDigest)
+	}
+
+	return nil
+}
+
+func (i *Image) extractLayer(tr *tar.Reader, imgRoot string) error {
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read tar header: %v", err)
+		}
+
+		targetPath := filepath.Join(imgRoot, header.Name)
+
+		// Security check: prevent path traversal
+		if !strings.HasPrefix(targetPath, imgRoot) {
+			continue
+		}
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(targetPath, os.FileMode(header.Mode)); err != nil {
+				return fmt.Errorf("failed to create directory %s: %v", targetPath, err)
+			}
+
+		case tar.TypeReg:
+			// Create directory for file if it doesn't exist
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				return fmt.Errorf("failed to create parent directory for %s: %v", targetPath, err)
+			}
+
+			// Create and write file
+			file, err := os.OpenFile(targetPath, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			if err != nil {
+				return fmt.Errorf("failed to create file %s: %v", targetPath, err)
+			}
+
+			if _, err := io.Copy(file, tr); err != nil {
+				file.Close()
+				return fmt.Errorf("failed to write file %s: %v", targetPath, err)
+			}
+			file.Close()
+
+		case tar.TypeSymlink:
+			// Create symbolic link
+			if err := os.Symlink(header.Linkname, targetPath); err != nil {
+				// Ignore if symlink already exists
+				if !os.IsExist(err) {
+					return fmt.Errorf("failed to create symlink %s: %v", targetPath, err)
+				}
+			}
+
+		case tar.TypeLink:
+			// Create hard link
+			linkTarget := filepath.Join(imgRoot, header.Linkname)
+			if err := os.Link(linkTarget, targetPath); err != nil {
+				// Ignore if link already exists
+				if !os.IsExist(err) {
+					return fmt.Errorf("failed to create hard link %s: %v", targetPath, err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (i *Image) fetchConfig(config *ImageConfig, digest string) error {
+	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, digest)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to fetch config with status: %d", resp.StatusCode)
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&config); err != nil {
 		return err
 	}
 
