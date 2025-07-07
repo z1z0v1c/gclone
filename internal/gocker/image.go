@@ -82,12 +82,11 @@ func (i *Image) pull() error {
 
 	fmt.Printf("Downloading config: %s\n", i.Manifest.Config.Digest)
 
-	var cfg ImageConfig
-	if err := i.fetchConfig(&cfg, i.Manifest.Config.Digest); err != nil {
+	if err := i.fetchConfig(i.Manifest.Config.Digest); err != nil {
 		return err
 	}
 
-	cfgData, err := json.MarshalIndent(cfg, "", "  ")
+	cfgData, err := json.MarshalIndent(i.Config, "", "  ")
 	if err != nil {
 		fatalf("Failed to marshal config: %v", err)
 	}
@@ -152,6 +151,7 @@ func (i *Image) fetchManifest() error {
 		return fmt.Errorf("failed to fetch manifest with status: %s", resp.Status)
 	}
 
+	i.Manifest = &Manifest{}
 	ctype := resp.Header.Get("Content-Type")
 
 	// Handle OCI Index (manifest list)
@@ -329,7 +329,7 @@ func (i *Image) extractLayer(tr *tar.Reader, imgRoot string) error {
 	return nil
 }
 
-func (i *Image) fetchConfig(config *ImageConfig, digest string) error {
+func (i *Image) fetchConfig(digest string) error {
 	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, i.Repository, digest)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -348,8 +348,9 @@ func (i *Image) fetchConfig(config *ImageConfig, digest string) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to fetch config with status: %d", resp.StatusCode)
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&config); err != nil {
+	
+	i.Config = &ImageConfig{}
+	if err := json.NewDecoder(resp.Body).Decode(i.Config); err != nil {
 		return err
 	}
 
