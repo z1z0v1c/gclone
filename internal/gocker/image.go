@@ -94,7 +94,7 @@ func (i *Image) pull() error {
 
 func (i *Image) authenticate() error {
 	// For Docker Hub, we need to get a token from auth.docker.io
-	authURL := fmt.Sprintf(authBaseURL, repository)
+	authURL := fmt.Sprintf(authBaseURL, i.Repository)
 
 	fmt.Printf("Authenticating with: %s\n", authURL)
 
@@ -180,7 +180,7 @@ func (i *Image) setRequestHeaders(req *http.Request) {
 }
 
 func (i *Image) fetchManifestByDigest(digest string) error {
-	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, digest)
+	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, i.Repository, digest)
 
 	fmt.Printf("Fetching platform-specific manifest: %s", url)
 
@@ -209,7 +209,7 @@ func (i *Image) fetchManifestByDigest(digest string) error {
 }
 
 func (i *Image) downloadAndExtractLayer(imgRoot, digest string) error {
-	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, digest)
+	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, i.Repository, digest)
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -320,7 +320,7 @@ func (i *Image) extractLayer(tr *tar.Reader, imgRoot string) error {
 }
 
 func (i *Image) fetchConfig(config *ImageConfig, digest string) error {
-	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, digest)
+	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, i.Repository, digest)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

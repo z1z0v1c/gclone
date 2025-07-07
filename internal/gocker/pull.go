@@ -7,10 +7,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	repository string
-)
-
 var PullCmd = &cobra.Command{
 	Use:                   "pull [image]",
 	Short:                 "Pull an image from Docker Hub",
