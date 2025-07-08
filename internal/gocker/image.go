@@ -8,10 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/z1z0v1c/gocker/pkg/http"
 )
 
 const (
@@ -100,7 +101,7 @@ func (i *Image) authenticate() error {
 	fmt.Printf("Authenticating with: %s\n", authURL)
 
 	var authResp AuthResponse
-	i.sendRequestAndDecode(&authResp, http.MethodGet, authURL, nil)
+	i.HttpClient.SendRequestAndDecode(&authResp, http.MethodGet, authURL, nil)
 
 	fmt.Printf("Authentication successful, token length: %d\n", len(authResp.Token))
 
@@ -111,10 +112,10 @@ func (i *Image) authenticate() error {
 
 func (i *Image) fetchManifest() error {
 	headers := make(map[string]string, 1)
-	headers["Authorization"] = "Bearer "+i.Token
+	headers["Authorization"] = "Bearer " + i.Token
 	headers["Accept"] = "application/vnd.docker.distribution.manifest.v2+json"
 
-	resp, err := i.sendRequest(http.MethodGet, manifestURL+i.Tag, headers)
+	resp, err := i.HttpClient.SendRequest(http.MethodGet, manifestURL+i.Tag, headers)
 	if err != nil {
 		return fmt.Errorf("failed to download layer: %v", err)
 	}
@@ -156,10 +157,10 @@ func (i *Image) fetchManifestByDigest(digest string) error {
 	fmt.Printf("Fetching platform-specific manifest: %s", digest)
 
 	headers := make(map[string]string, 1)
-	headers["Authorization"] = "Bearer "+i.Token
+	headers["Authorization"] = "Bearer " + i.Token
 	headers["Accept"] = "application/vnd.docker.distribution.manifest.v2+json"
 
-	i.sendRequestAndDecode(i.Manifest, http.MethodGet, manifestURL+digest, headers)
+	i.HttpClient.SendRequestAndDecode(i.Manifest, http.MethodGet, manifestURL+digest, headers)
 
 	return nil
 }
@@ -178,9 +179,9 @@ func (i *Image) downloadAndExtract() error {
 
 func (i *Image) downloadAndExtractLayer(digest string) error {
 	headers := make(map[string]string, 1)
-	headers["Authorization"] = "Bearer "+i.Token
+	headers["Authorization"] = "Bearer " + i.Token
 
-	resp, err := i.sendRequest(http.MethodGet, blobsURL+digest, headers)
+	resp, err := i.HttpClient.SendRequest(http.MethodGet, blobsURL+digest, headers)
 	if err != nil {
 		return fmt.Errorf("failed to download layer: %v", err)
 	}
@@ -277,52 +278,16 @@ func (i *Image) extractLayer(tr *tar.Reader, imgRoot string) error {
 	return nil
 }
 
-func (i *Image) sendRequest(method string, url string, headers map[string]string) (*http.Response, error) {
-	req, err := http.NewRequest(method, url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-
-	resp, err := i.HttpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch config with status: %d", resp.StatusCode)
-	}
-
-	return resp, nil
-}
-
-func (i *Image) sendRequestAndDecode(v any, method string, url string, headers map[string]string) error {
-	resp, err := i.sendRequest(method, url, headers)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (i *Image) fetchConfig() error {
 	digest := i.Manifest.Config.Digest
 
 	fmt.Printf("Downloading config: %s\n", digest)
 
 	headers := make(map[string]string, 1)
-	headers["Authorization"] = "Bearer "+i.Token
+	headers["Authorization"] = "Bearer " + i.Token
 
 	i.Cfg = &ImageConfig{}
-	i.sendRequestAndDecode(i.Cfg, http.MethodGet, blobsURL+digest, headers)
+	i.HttpClient.SendRequestAndDecode(i.Cfg, http.MethodGet, blobsURL+digest, headers)
 
 	cfgData, err := json.MarshalIndent(i.Cfg, "", "  ")
 	if err != nil {

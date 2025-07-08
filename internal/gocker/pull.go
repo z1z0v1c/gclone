@@ -2,10 +2,10 @@ package gocker
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/z1z0v1c/gocker/pkg/http"
 )
 
 var PullCmd = &cobra.Command{
@@ -19,7 +19,7 @@ var PullCmd = &cobra.Command{
 
 func pull(c *cobra.Command, args []string) {
 	imgName := args[0]
-	httpClient := &http.Client{}
+	httpClient := http.NewHttpClient()
 
 	img := NewImage(imgName, httpClient)
 
