@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/z1z0v1c/gocker/internal/gocker/image"
-	"github.com/z1z0v1c/gocker/pkg/http"
+	"github.com/z1z0v1c/gclone/internal/gocker/image"
+	"github.com/z1z0v1c/gclone/pkg/http"
 )
 
 // Pull is the Cobra command for pulling a container image from Docker Hub.

@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/z1z0v1c/gocker/internal/gocker/cmd"
+	"github.com/z1z0v1c/gclone/internal/gocker/cmd"
 )
 
 // gocker is the root Cobra command for the gocker CLI tool.

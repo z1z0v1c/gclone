@@ -6,7 +6,7 @@ import (
 	"os/exec"
 
 	"github.com/spf13/cobra"
-	"github.com/z1z0v1c/gocker/internal/gocker/container"
+	"github.com/z1z0v1c/gclone/internal/gocker/container"
 )
 
 // Run is the Cobra command to launch a container from a previously pulled image.

@@ -14,8 +14,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/z1z0v1c/gocker/pkg/http"
-	"github.com/z1z0v1c/gocker/registry"
+	"github.com/z1z0v1c/gclone/internal/gocker/registry"
+	"github.com/z1z0v1c/gclone/pkg/http"
 )
 
 const (
@@ -96,7 +96,7 @@ func (i *Client) Pull() error {
 	if err := i.downloadImage(); err != nil {
 		return err
 	}
-	
+
 	if err := i.extractImage(); err != nil {
 		return err
 	}
@@ -176,7 +176,6 @@ func (i *Client) fetchManifestByDigest(digest string) error {
 
 	return nil
 }
-
 
 func (i *Client) downloadImage() error {
 	i.downloadedLayers = make(map[string][]byte)

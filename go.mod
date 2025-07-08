@@ -1,4 +1,4 @@
-module github.com/z1z0v1c/gocker
+module github.com/z1z0v1c/gclone
 
 go 1.24.4
 

@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/z1z0v1c/gocker/internal/gocker/image"
-	"github.com/z1z0v1c/gocker/registry"
+	"github.com/z1z0v1c/gclone/internal/gocker/image"
+	"github.com/z1z0v1c/gclone/internal/gocker/registry"
 )
 
 const (
