@@ -30,48 +30,48 @@ var (
 	blobsURL    string
 )
 
-type Image struct {
-	Name       string
-	Tag        string
-	Path       string
-	Root       string
-	CfgPath    string
-	Repository string
-	Token      string
+type ImagePuller struct {
+	imgName    string
+	imgTag     string
+	imgPath    string
+	imgRoot    string
+	cfgPath    string
+	repository string
+	token      string
 
-	Manifest *Manifest
-	Cfg      *ImageConfig
+	manifest *Manifest
+	cfg      *ImageConfig
 
-	HttpClient *http.Client
+	httpClient *http.Client
 }
 
-func NewImage(name string, httpClient *http.Client) *Image {
+func NewImagePuller(imgName string, httpClient *http.Client) *ImagePuller {
 	tag := "latest"
 	homeDir := os.Getenv("HOME")
 
-	imgPath := filepath.Join(homeDir, RelativeImagesPath, name)
+	imgPath := filepath.Join(homeDir, RelativeImagesPath, imgName)
 	imgRoot := filepath.Join(imgPath, "rootfs")
 	cfgPath := filepath.Join(imgPath, ".config.json")
-	repository := filepath.Join("library", name)
+	repository := filepath.Join("library", imgName)
 
 	authURL = fmt.Sprintf(authBaseURL, repository)
 	manifestURL = fmt.Sprintf(manifestBaseURL, registry, repository)
 	blobsURL = fmt.Sprintf(blobsBaseURL, registry, repository)
 
-	return &Image{
-		Name:       name,
-		Tag:        tag,
-		Path:       imgPath,
-		Root:       imgRoot,
-		CfgPath:    cfgPath,
-		Repository: repository,
-		HttpClient: httpClient,
+	return &ImagePuller{
+		imgName:    imgName,
+		imgTag:     tag,
+		imgPath:    imgPath,
+		imgRoot:    imgRoot,
+		cfgPath:    cfgPath,
+		repository: repository,
+		httpClient: httpClient,
 	}
 }
 
-func (i *Image) Pull() error {
+func (i *ImagePuller) Pull() error {
 	fmt.Printf("Pulling %q image from the %q repository in %q registry...\n",
-		i.Name, i.Repository, registry)
+		i.imgName, i.repository, registry)
 
 	if err := i.authenticate(); err != nil {
 		return err
@@ -94,36 +94,36 @@ func (i *Image) Pull() error {
 		return err
 	}
 
-	fmt.Printf("Image %q pulled successfully to %q\n", i.Name, i.Path)
+	fmt.Printf("Image %q pulled successfully to %q\n", i.imgName, i.imgPath)
 
 	return nil
 }
 
-func (i *Image) authenticate() error {
+func (i *ImagePuller) authenticate() error {
 	fmt.Printf("Authenticating with: %s\n", authURL)
 
 	var authResp AuthResponse
-	i.HttpClient.SendRequestAndDecode(&authResp, http.MethodGet, authURL, nil)
+	i.httpClient.SendRequestAndDecode(&authResp, http.MethodGet, authURL, nil)
 
 	fmt.Printf("Authentication successful, token length: %d\n", len(authResp.Token))
 
-	i.Token = authResp.Token
+	i.token = authResp.Token
 
 	return nil
 }
 
-func (i *Image) fetchManifest() error {
+func (i *ImagePuller) fetchManifest() error {
 	headers := make(map[string]string, 1)
-	headers["Authorization"] = "Bearer " + i.Token
+	headers["Authorization"] = "Bearer " + i.token
 	headers["Accept"] = "application/vnd.docker.distribution.manifest.v2+json"
 
-	resp, err := i.HttpClient.SendRequest(http.MethodGet, manifestURL+i.Tag, headers)
+	resp, err := i.httpClient.SendRequest(http.MethodGet, manifestURL+i.imgTag, headers)
 	if err != nil {
 		return fmt.Errorf("failed to download layer: %v", err)
 	}
 	defer resp.Body.Close()
 
-	i.Manifest = &Manifest{}
+	i.manifest = &Manifest{}
 	ctype := resp.Header.Get("Content-Type")
 
 	// Handle OCI Index (manifest list)
@@ -146,30 +146,30 @@ func (i *Image) fetchManifest() error {
 		return fmt.Errorf("no matching platform found in manifest index")
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(i.Manifest); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(i.manifest); err != nil {
 		return err
 	}
 
-	fmt.Printf("Found %d layers to download\n", len(i.Manifest.Layers))
+	fmt.Printf("Found %d layers to download\n", len(i.manifest.Layers))
 
 	return nil
 }
 
-func (i *Image) fetchManifestByDigest(digest string) error {
+func (i *ImagePuller) fetchManifestByDigest(digest string) error {
 	fmt.Printf("Fetching platform-specific manifest: %s", digest)
 
 	headers := make(map[string]string, 1)
-	headers["Authorization"] = "Bearer " + i.Token
+	headers["Authorization"] = "Bearer " + i.token
 	headers["Accept"] = "application/vnd.docker.distribution.manifest.v2+json"
 
-	i.HttpClient.SendRequestAndDecode(i.Manifest, http.MethodGet, manifestURL+digest, headers)
+	i.httpClient.SendRequestAndDecode(i.manifest, http.MethodGet, manifestURL+digest, headers)
 
 	return nil
 }
 
-func (i *Image) downloadAndExtract() error {
-	for j, layer := range i.Manifest.Layers {
-		fmt.Printf("Downloading layer %d/%d: %s\n", j+1, len(i.Manifest.Layers), layer.Digest)
+func (i *ImagePuller) downloadAndExtract() error {
+	for j, layer := range i.manifest.Layers {
+		fmt.Printf("Downloading layer %d/%d: %s\n", j+1, len(i.manifest.Layers), layer.Digest)
 
 		if err := i.downloadAndExtractLayer(layer.Digest); err != nil {
 			return err
@@ -179,11 +179,11 @@ func (i *Image) downloadAndExtract() error {
 	return nil
 }
 
-func (i *Image) downloadAndExtractLayer(digest string) error {
+func (i *ImagePuller) downloadAndExtractLayer(digest string) error {
 	headers := make(map[string]string, 1)
-	headers["Authorization"] = "Bearer " + i.Token
+	headers["Authorization"] = "Bearer " + i.token
 
-	resp, err := i.HttpClient.SendRequest(http.MethodGet, blobsURL+digest, headers)
+	resp, err := i.httpClient.SendRequest(http.MethodGet, blobsURL+digest, headers)
 	if err != nil {
 		return fmt.Errorf("failed to download layer: %v", err)
 	}
@@ -204,7 +204,7 @@ func (i *Image) downloadAndExtractLayer(digest string) error {
 	tr := tar.NewReader(gr)
 
 	// Extract files
-	i.extractLayer(tr, i.Root)
+	i.extractLayer(tr, i.imgRoot)
 
 	// Verify the digest
 	actualDigest := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
@@ -215,7 +215,7 @@ func (i *Image) downloadAndExtractLayer(digest string) error {
 	return nil
 }
 
-func (i *Image) extractLayer(tr *tar.Reader, imgRoot string) error {
+func (i *ImagePuller) extractLayer(tr *tar.Reader, imgRoot string) error {
 	for {
 		header, err := tr.Next()
 		if err == io.EOF {
@@ -280,37 +280,37 @@ func (i *Image) extractLayer(tr *tar.Reader, imgRoot string) error {
 	return nil
 }
 
-func (i *Image) fetchConfig() error {
-	digest := i.Manifest.Config.Digest
+func (i *ImagePuller) fetchConfig() error {
+	digest := i.manifest.Config.Digest
 
 	fmt.Printf("Downloading config: %s\n", digest)
 
 	headers := make(map[string]string, 1)
-	headers["Authorization"] = "Bearer " + i.Token
+	headers["Authorization"] = "Bearer " + i.token
 
-	i.Cfg = &ImageConfig{}
-	i.HttpClient.SendRequestAndDecode(i.Cfg, http.MethodGet, blobsURL+digest, headers)
+	i.cfg = &ImageConfig{}
+	i.httpClient.SendRequestAndDecode(i.cfg, http.MethodGet, blobsURL+digest, headers)
 
-	cfgData, err := json.MarshalIndent(i.Cfg, "", "  ")
+	cfgData, err := json.MarshalIndent(i.cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %v", err)
 	}
 
 	// Save config data
-	if err := os.WriteFile(i.CfgPath, cfgData, 0644); err != nil {
+	if err := os.WriteFile(i.cfgPath, cfgData, 0644); err != nil {
 		return fmt.Errorf("failed to save config file: %v", err)
 	}
 
 	return nil
 }
 
-func (i *Image) mkdirRootfs() error {
-	if err := os.RemoveAll(i.Path); err != nil {
+func (i *ImagePuller) mkdirRootfs() error {
+	if err := os.RemoveAll(i.imgPath); err != nil {
 		return fmt.Errorf("failed to remove existing image dir: %v", err)
 	}
 
 	// Create rootfs directory
-	if err := os.MkdirAll(i.Root, 0755); err != nil {
+	if err := os.MkdirAll(i.imgRoot, 0755); err != nil {
 		return fmt.Errorf("failed to create image rootfs dir: %v", err)
 	}
 
