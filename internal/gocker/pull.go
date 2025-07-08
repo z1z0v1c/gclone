@@ -2,6 +2,7 @@ package gocker
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -18,8 +19,9 @@ var PullCmd = &cobra.Command{
 
 func pull(c *cobra.Command, args []string) {
 	imgName := args[0]
+	httpClient := &http.Client{}
 
-	img := NewImage(imgName)
+	img := NewImage(imgName, httpClient)
 
 	if err := img.pull(); err != nil {
 		fmt.Printf("Error while pulling %q image: %v\n", img.Name, err)

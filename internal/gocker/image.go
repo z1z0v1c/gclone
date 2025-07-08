@@ -38,9 +38,11 @@ type Image struct {
 
 	Manifest *Manifest
 	Cfg      *ImageConfig
+
+	HttpClient *http.Client
 }
 
-func NewImage(name string) *Image {
+func NewImage(name string, httpClient *http.Client) *Image {
 	tag := "latest"
 	homeDir := os.Getenv("HOME")
 
@@ -60,6 +62,7 @@ func NewImage(name string) *Image {
 		Root:       imgRoot,
 		CfgPath:    cfgPath,
 		Repository: repository,
+		HttpClient: httpClient,
 	}
 }
 
@@ -96,7 +99,7 @@ func (i *Image) pull() error {
 func (i *Image) authenticate() error {
 	fmt.Printf("Authenticating with: %s\n", authURL)
 
-	resp, err := http.Get(authURL)
+	resp, err := i.HttpClient.Get(authURL)
 	if err != nil {
 		return err
 	}
@@ -128,7 +131,7 @@ func (i *Image) fetchManifest() error {
 
 	i.setRequestHeaders(req)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := i.HttpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -186,7 +189,7 @@ func (i *Image) fetchManifestByDigest(digest string) error {
 
 	i.setRequestHeaders(req)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := i.HttpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -223,7 +226,7 @@ func (i *Image) downloadAndExtractLayer(digest string) error {
 
 	req.Header.Set("Authorization", "Bearer "+i.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := i.HttpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -336,7 +339,7 @@ func (i *Image) fetchConfig() error {
 
 	req.Header.Set("Authorization", "Bearer "+i.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := i.HttpClient.Do(req)
 	if err != nil {
 		return err
 	}
