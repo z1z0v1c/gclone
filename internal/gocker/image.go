@@ -99,20 +99,8 @@ func (i *Image) pull() error {
 func (i *Image) authenticate() error {
 	fmt.Printf("Authenticating with: %s\n", authURL)
 
-	resp, err := i.HttpClient.Get(authURL)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("authentication failed with status: %d", resp.StatusCode)
-	}
-
 	var authResp AuthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
-		return err
-	}
+	i.sendRequestAndDecode(&authResp, http.MethodGet, authURL, nil)
 
 	fmt.Printf("Authentication successful, token length: %d\n", len(authResp.Token))
 
@@ -122,24 +110,15 @@ func (i *Image) authenticate() error {
 }
 
 func (i *Image) fetchManifest() error {
-	fmt.Printf("Fetching manifest from: %s\n", manifestURL+i.Tag)
+	headers := make(map[string]string, 1)
+	headers["Authorization"] = "Bearer "+i.Token
+	headers["Accept"] = "application/vnd.docker.distribution.manifest.v2+json"
 
-	req, err := http.NewRequest("GET", manifestURL+i.Tag, nil)
+	resp, err := i.sendRequest(http.MethodGet, manifestURL+i.Tag, headers)
 	if err != nil {
-		return err
-	}
-
-	i.setRequestHeaders(req)
-
-	resp, err := i.HttpClient.Do(req)
-	if err != nil {
-		return err
+		return fmt.Errorf("failed to download layer: %v", err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to fetch manifest with status: %s", resp.Status)
-	}
 
 	i.Manifest = &Manifest{}
 	ctype := resp.Header.Get("Content-Type")
@@ -173,35 +152,14 @@ func (i *Image) fetchManifest() error {
 	return nil
 }
 
-func (i *Image) setRequestHeaders(req *http.Request) {
-	req.Header.Set("Authorization", "Bearer "+i.Token)
-	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
-	req.Header.Set("User-Agent", "gocker/1.0")
-}
-
 func (i *Image) fetchManifestByDigest(digest string) error {
 	fmt.Printf("Fetching platform-specific manifest: %s", digest)
 
-	req, err := http.NewRequest(http.MethodGet, manifestURL+digest, nil)
-	if err != nil {
-		return err
-	}
+	headers := make(map[string]string, 1)
+	headers["Authorization"] = "Bearer "+i.Token
+	headers["Accept"] = "application/vnd.docker.distribution.manifest.v2+json"
 
-	i.setRequestHeaders(req)
-
-	resp, err := i.HttpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to fetch manifest by digest, status: %d", resp.StatusCode)
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(i.Manifest); err != nil {
-		return err
-	}
+	i.sendRequestAndDecode(i.Manifest, http.MethodGet, manifestURL+digest, headers)
 
 	return nil
 }
@@ -219,22 +177,14 @@ func (i *Image) downloadAndExtract() error {
 }
 
 func (i *Image) downloadAndExtractLayer(digest string) error {
-	req, err := http.NewRequest(http.MethodGet, blobsURL+digest, nil)
-	if err != nil {
-		return err
-	}
+	headers := make(map[string]string, 1)
+	headers["Authorization"] = "Bearer "+i.Token
 
-	req.Header.Set("Authorization", "Bearer "+i.Token)
-
-	resp, err := i.HttpClient.Do(req)
+	resp, err := i.sendRequest(http.MethodGet, blobsURL+digest, headers)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to download layer: %v", err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to download layer with status: %d", resp.StatusCode)
-	}
 
 	// Verify digest
 	hasher := sha256.New()
@@ -341,7 +291,6 @@ func (i *Image) sendRequest(method string, url string, headers map[string]string
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch config with status: %d", resp.StatusCode)
@@ -355,6 +304,7 @@ func (i *Image) sendRequestAndDecode(v any, method string, url string, headers m
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
 		return err
