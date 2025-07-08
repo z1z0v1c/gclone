@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -35,8 +36,21 @@ func serve(c *cobra.Command, args []string) {
 			log.Fatal(err)
 		}
 
-		spl := strings.Split(msg, " ")
-		resp := fmt.Sprintf("HTTP/1.1 200 OK\r\n\r\nRequested path: %s\r\n", spl[1])
+		path := strings.Split(msg, " ")[1]
+
+		if path == "/" {
+			path = "/index.html"
+		}
+
+		path = strings.TrimPrefix(path, "/")
+
+		var resp string
+		data, err := os.ReadFile(path)
+		if err == nil {
+			resp = "HTTP/1.1 404 Not Found\r\n"
+		}
+
+		resp = fmt.Sprintf("HTTP/1.1 200 OK\r\n\r\n%s\r\n", data)
 
 		conn.Write([]byte(resp))
 	}
