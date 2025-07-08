@@ -19,7 +19,6 @@ func init() {
 
 func main() {
 	if err := gocker.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Error: %v", err); os.Exit(1)
 	}
 }

@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/spf13/cobra"
 	"github.com/z1z0v1c/gocker/internal/gocker/container"
 )
@@ -14,10 +17,10 @@ var Run = &cobra.Command{
 }
 
 func run(c *cobra.Command, args []string) {
-	cnt, err := container.NewContainer(args)
+	cn, err := container.NewContainer(args)
 	if err != nil {
-		fatalf("Error during container creation: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error during container creation: %v\n", err); os.Exit(1)
 	}
 
-	cnt.Run()
+	cn.Run()
 }
