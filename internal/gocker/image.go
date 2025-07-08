@@ -327,32 +327,52 @@ func (i *Image) extractLayer(tr *tar.Reader, imgRoot string) error {
 	return nil
 }
 
+func (i *Image) sendRequest(method string, url string, headers map[string]string) (*http.Response, error) {
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := i.HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch config with status: %d", resp.StatusCode)
+	}
+
+	return resp, nil
+}
+
+func (i *Image) sendRequestAndDecode(v any, method string, url string, headers map[string]string) error {
+	resp, err := i.sendRequest(method, url, headers)
+	if err != nil {
+		return err
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (i *Image) fetchConfig() error {
 	digest := i.Manifest.Config.Digest
 
 	fmt.Printf("Downloading config: %s\n", digest)
 
-	req, err := http.NewRequest("GET", blobsURL+digest, nil)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+i.Token)
-
-	resp, err := i.HttpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to fetch config with status: %d", resp.StatusCode)
-	}
+	headers := make(map[string]string, 1)
+	headers["Authorization"] = "Bearer "+i.Token
 
 	i.Cfg = &ImageConfig{}
-	if err := json.NewDecoder(resp.Body).Decode(i.Cfg); err != nil {
-		return err
-	}
+	i.sendRequestAndDecode(i.Cfg, http.MethodGet, blobsURL+digest, headers)
 
 	cfgData, err := json.MarshalIndent(i.Cfg, "", "  ")
 	if err != nil {
