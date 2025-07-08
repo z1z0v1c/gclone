@@ -6,8 +6,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -37,6 +37,7 @@ func serve(c *cobra.Command, args []string) {
 }
 
 func handleConnection(conn net.Conn) {
+	var resp string
 	defer conn.Close()
 
 	msg, err := bufio.NewReader(conn).ReadString('\n')
@@ -50,18 +51,28 @@ func handleConnection(conn net.Conn) {
 		path = "/index.html"
 	}
 
-	path = strings.TrimPrefix(path, "/")
+	wwwRoot, err := filepath.Abs("./internal/ginx/www")
+	if err != nil {
+		log.Fatal("Invalid www root:", err)
+	}
+
+	path = filepath.Join(wwwRoot, path)
+
+	// Prevent directory traversal
+	path, err = filepath.Abs(path)
+	if err != nil || !strings.HasPrefix(path, wwwRoot) {
+		resp = "HTTP/1.1 403 Forbidden\r\n"
+		conn.Write([]byte(resp))
+	}
 	fmt.Printf("Path: %s\n", path)
 
-	var resp string
 	data, err := os.ReadFile(path)
 	if err != nil {
+		fmt.Printf("Error: %v\n", err)
 		resp = "HTTP/1.1 404 Not Found\r\n"
 	} else {
 		resp = fmt.Sprintf("HTTP/1.1 200 OK\r\n\r\n%s\r\n", data)
 	}
-
-	time.Sleep(5 * time.Second)
 
 	conn.Write([]byte(resp))
 }
