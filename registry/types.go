@@ -1,4 +1,6 @@
-package image
+package registry
+
+const URL = "registry-1.docker.io"
 
 // AuthResponse represents the token response from the Docker Registry auth API.
 type AuthResponse struct {
@@ -23,7 +25,7 @@ type Manifest struct {
 }
 
 // ManifestIndex represents a manifest list (multi-platform index).
-// It maps platforms (e.g., linux/amd64) to specific manifest digests
+// It maps platforms (e.g., linux/amd64) to specific manifest digests.
 type ManifestIndex struct {
 	SchemaVersion int    `json:"schemaVersion"`
 	MediaType     string `json:"mediaType"`
@@ -37,7 +39,7 @@ type ManifestIndex struct {
 	} `json:"manifests"`
 }
 
-// ImageConfig represents the full image configuration
+// ImageConfig represents the full image configuration.
 type ImageConfig struct {
 	Architecture string `json:"architecture"`
 	Config       struct {

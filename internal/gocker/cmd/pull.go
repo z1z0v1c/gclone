@@ -24,9 +24,11 @@ func pull(c *cobra.Command, args []string) {
 	imgName := args[0]
 	httpClient := http.NewHttpClient()
 
-	img := image.NewImagePuller(imgName, httpClient)
+	img := image.NewClient(imgName, httpClient)
 
 	if err := img.Pull(); err != nil {
-		fmt.Printf("Error while pulling %q image: %v\n", imgName, err); os.Exit(1)
+		fmt.Printf("Error while pulling %q image: %v\n", imgName, err)
+
+		os.Exit(1)
 	}
 }

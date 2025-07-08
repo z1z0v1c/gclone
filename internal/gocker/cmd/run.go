@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/spf13/cobra"
 	"github.com/z1z0v1c/gocker/internal/gocker/container"
@@ -19,10 +20,23 @@ var Run = &cobra.Command{
 
 // run is the command handler function that creates and runs the container.
 func run(c *cobra.Command, args []string) {
-	cn, err := container.NewContainer(args)
+	imgName, cmd, args := args[0], args[1], args[2:]
+
+	cn, err := container.NewContainer(imgName, cmd, args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error during container creation: %v\n", err); os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Error during container creation: %v\n", err)
+
+		os.Exit(1)
 	}
 
-	cn.Run()
+	if err := cn.Run(); err != nil {
+		// Handle exit error for proper exit code propagation
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			os.Exit(exitErr.ExitCode())
+		} else {
+			fmt.Fprintf(os.Stderr, "Error during container excecution: %v\n", err)
+			
+			os.Exit(1)
+		}
+	}
 }

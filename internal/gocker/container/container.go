@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/z1z0v1c/gocker/internal/gocker/image"
+	"github.com/z1z0v1c/gocker/registry"
 )
 
 const (
@@ -29,9 +30,7 @@ type Container struct {
 }
 
 // NewContainer creates a new Container from the given CLI arguments.
-func NewContainer(args []string) (*Container, error) {
-	imgName, cmd, args := args[0], args[1], args[2:]
-
+func NewContainer(imgName, cmd string, args []string) (*Container, error) {
 	imgRoot := filepath.Join(os.Getenv("HOME"), image.RelativeImagesPath, imgName, "rootfs")
 	cfgPath := filepath.Join(os.Getenv("HOME"), image.RelativeImagesPath, imgName, ".config.json")
 
@@ -56,9 +55,8 @@ func NewContainer(args []string) (*Container, error) {
 	return c, nil
 }
 
-
 // Run starts the container execution.
-func (c *Container) Run() {
+func (c *Container) Run() error {
 	var err error
 
 	if os.Getenv("IS_CHILD") == "1" {
@@ -67,14 +65,7 @@ func (c *Container) Run() {
 		err = c.runParentProcess()
 	}
 
-	if err != nil {
-		// Handle exit error for proper exit code propagation
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			os.Exit(exitErr.ExitCode())
-		} else {
-			fmt.Fprintf(os.Stderr, "Error: %v", err); os.Exit(1)
-		}
-	}
+	return err
 }
 
 // runParentProcess sets up cgroups and forks a child process with namespace isolation.
@@ -219,7 +210,7 @@ func (c *Container) fromConfigFile(path string) error {
 	}
 	defer cfgFile.Close()
 
-	var cfg image.ImageConfig
+	var cfg registry.ImageConfig
 	if err = json.NewDecoder(cfgFile).Decode(&cfg); err != nil {
 		return fmt.Errorf("failed to decode config file: %v", err)
 	}

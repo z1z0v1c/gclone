@@ -14,13 +14,13 @@ import (
 	"strings"
 
 	"github.com/z1z0v1c/gocker/pkg/http"
+	"github.com/z1z0v1c/gocker/registry"
 )
 
 const (
-	// RelativeImagesPath is the relative images path under the user's home directory
+	// RelativeImagesPath is the relative images path under the user's home directory.
 	RelativeImagesPath = ".local/share/gocker/images/"
 
-	registry        = "registry-1.docker.io"
 	authURLBase     = "https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull"
 	manifestURLBase = "https://%s/v2/%s/manifests/"
 	blobsURLBase    = "https://%s/v2/%s/blobs/"
@@ -32,25 +32,25 @@ var (
 	blobsURL    string
 )
 
-// ImagePuller encapsulates the parameters to pull and unpack an image.
-type ImagePuller struct {
-	imgName    string
-	imgTag     string
-	imgPath    string
-	imgRoot    string
-	cfgPath    string
+// Client encapsulates the parameters to pull and unpack an image.
+type Client struct {
+	imageName  string
+	imageTag   string
+	imagePath  string
+	imageRoot  string
+	configPath string
 	repository string
 	token      string
 
-	manifest *Manifest
-	cfg      *ImageConfig
+	manifest *registry.Manifest
+	config   *registry.ImageConfig
 
 	httpClient *http.Client
 }
 
-// NewImagePuller creates and initializes a new ImagePuller for the given image name.
-func NewImagePuller(imgName string, httpClient *http.Client) *ImagePuller {
-	tag := "latest"
+// NewClient creates and initializes a new ImagePuller for the given image name.
+func NewClient(imgName string, httpClient *http.Client) *Client {
+	imgTag := "latest"
 	homeDir := os.Getenv("HOME")
 
 	imgPath := filepath.Join(homeDir, RelativeImagesPath, imgName)
@@ -59,23 +59,23 @@ func NewImagePuller(imgName string, httpClient *http.Client) *ImagePuller {
 	repository := filepath.Join("library", imgName)
 
 	authURL = fmt.Sprintf(authURLBase, repository)
-	manifestURL = fmt.Sprintf(manifestURLBase, registry, repository)
-	blobsURL = fmt.Sprintf(blobsURLBase, registry, repository)
+	manifestURL = fmt.Sprintf(manifestURLBase, registry.URL, repository)
+	blobsURL = fmt.Sprintf(blobsURLBase, registry.URL, repository)
 
-	return &ImagePuller{
-		imgName:    imgName,
-		imgTag:     tag,
-		imgPath:    imgPath,
-		imgRoot:    imgRoot,
-		cfgPath:    cfgPath,
+	return &Client{
+		imageName:  imgName,
+		imageTag:   imgTag,
+		imagePath:  imgPath,
+		imageRoot:  imgRoot,
+		configPath: cfgPath,
 		repository: repository,
 		httpClient: httpClient,
 	}
 }
 
 // Pull downloads and extracts the image.
-func (i *ImagePuller) Pull() error {
-	fmt.Printf("Pulling from %s using default tag: %s\n", i.repository, i.imgTag)
+func (i *Client) Pull() error {
+	fmt.Printf("Pulling from %s using default tag: %s\n", i.repository, i.imageTag)
 
 	if err := i.authenticate(); err != nil {
 		return err
@@ -98,14 +98,14 @@ func (i *ImagePuller) Pull() error {
 		return err
 	}
 
-	fmt.Printf("Status: Downloaded image for %s:%s\n", i.imgName, i.imgTag)
+	fmt.Printf("Status: Downloaded image for %s:%s\n", i.imageName, i.imageTag)
 
 	return nil
 }
 
 // authenticate retrieves an access token from Docker Hub.
-func (i *ImagePuller) authenticate() error {
-	var authResp AuthResponse
+func (i *Client) authenticate() error {
+	var authResp registry.AuthResponse
 	i.httpClient.SendRequestAndDecode(&authResp, http.MethodGet, authURL, nil)
 
 	i.token = authResp.Token
@@ -114,24 +114,24 @@ func (i *ImagePuller) authenticate() error {
 }
 
 // fetchManifest retrieves the manifest or manifest index for the image.
-func (i *ImagePuller) fetchManifest() error {
+func (i *Client) fetchManifest() error {
 	headers := map[string]string{
 		"Authorization": "Bearer " + i.token,
 		"Accept":        "application/vnd.docker.distribution.manifest.v2+json",
 	}
 
-	resp, err := i.httpClient.SendRequest(http.MethodGet, manifestURL+i.imgTag, headers)
+	resp, err := i.httpClient.SendRequest(http.MethodGet, manifestURL+i.imageTag, headers)
 	if err != nil {
 		return fmt.Errorf("failed to download layer: %v", err)
 	}
 	defer resp.Body.Close()
 
-	i.manifest = &Manifest{}
+	i.manifest = &registry.Manifest{}
 	ctype := resp.Header.Get("Content-Type")
 
 	// Handle OCI Index (manifest list)
 	if ctype == "application/vnd.oci.image.index.v1+json" || ctype == "application/vnd.docker.distribution.manifest.list.v2+json" {
-		var index ManifestIndex
+		var index registry.ManifestIndex
 		if err := json.NewDecoder(resp.Body).Decode(&index); err != nil {
 			return fmt.Errorf("error decoding manifest index: %v", err)
 		}
@@ -159,7 +159,7 @@ func (i *ImagePuller) fetchManifest() error {
 }
 
 // fetchManifestByDigest fetches a platform-specific manifest by its digest.
-func (i *ImagePuller) fetchManifestByDigest(digest string) error {
+func (i *Client) fetchManifestByDigest(digest string) error {
 	headers := map[string]string{
 		"Authorization": "Bearer " + i.token,
 		"Accept":        "application/vnd.docker.distribution.manifest.v2+json",
@@ -171,7 +171,7 @@ func (i *ImagePuller) fetchManifestByDigest(digest string) error {
 }
 
 // downloadAndExtractImage downloads and extracts all layers listed in the manifest.
-func (i *ImagePuller) downloadAndExtractImage() error {
+func (i *Client) downloadAndExtractImage() error {
 	for j, layer := range i.manifest.Layers {
 		fmt.Printf("Downloading layer %d/%d...\n", j+1, len(i.manifest.Layers))
 
@@ -184,7 +184,7 @@ func (i *ImagePuller) downloadAndExtractImage() error {
 }
 
 // downloadAndExtractLayer downloads and extracts a single layer by digest.
-func (i *ImagePuller) downloadAndExtractLayer(digest string) error {
+func (i *Client) downloadAndExtractLayer(digest string) error {
 	headers := map[string]string{
 		"Authorization": "Bearer " + i.token,
 	}
@@ -207,7 +207,7 @@ func (i *ImagePuller) downloadAndExtractLayer(digest string) error {
 
 	tr := tar.NewReader(gr)
 
-	i.extractLayer(tr, i.imgRoot)
+	i.extractLayer(tr, i.imageRoot)
 
 	// Verify the digest
 	actualDigest := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
@@ -219,7 +219,7 @@ func (i *ImagePuller) downloadAndExtractLayer(digest string) error {
 }
 
 // extractLayer unpacks the contents of a tar stream into the image root filesystem.
-func (i *ImagePuller) extractLayer(tr *tar.Reader, imgRoot string) error {
+func (i *Client) extractLayer(tr *tar.Reader, imgRoot string) error {
 	for {
 		header, err := tr.Next()
 		if err == io.EOF {
@@ -284,7 +284,7 @@ func (i *ImagePuller) extractLayer(tr *tar.Reader, imgRoot string) error {
 }
 
 // fetchConfig downloads and saves the image configuration file.
-func (i *ImagePuller) fetchConfig() error {
+func (i *Client) fetchConfig() error {
 	digest := i.manifest.Config.Digest
 
 	fmt.Printf("Downloading config file...\n")
@@ -292,16 +292,16 @@ func (i *ImagePuller) fetchConfig() error {
 	headers := make(map[string]string, 1)
 	headers["Authorization"] = "Bearer " + i.token
 
-	i.cfg = &ImageConfig{}
-	i.httpClient.SendRequestAndDecode(i.cfg, http.MethodGet, blobsURL+digest, headers)
+	i.config = &registry.ImageConfig{}
+	i.httpClient.SendRequestAndDecode(i.config, http.MethodGet, blobsURL+digest, headers)
 
-	cfgData, err := json.MarshalIndent(i.cfg, "", "  ")
+	cfgData, err := json.MarshalIndent(i.config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %v", err)
 	}
 
 	// Save config data
-	if err := os.WriteFile(i.cfgPath, cfgData, 0644); err != nil {
+	if err := os.WriteFile(i.configPath, cfgData, 0644); err != nil {
 		return fmt.Errorf("failed to save config file: %v", err)
 	}
 
@@ -309,12 +309,12 @@ func (i *ImagePuller) fetchConfig() error {
 }
 
 // mkdirRootfs removes existing image data and creates the rootfs directory structure.
-func (i *ImagePuller) mkdirRootfs() error {
-	if err := os.RemoveAll(i.imgPath); err != nil {
+func (i *Client) mkdirRootfs() error {
+	if err := os.RemoveAll(i.imagePath); err != nil {
 		return fmt.Errorf("failed to remove existing image dir: %v", err)
 	}
 
-	if err := os.MkdirAll(i.imgRoot, 0755); err != nil {
+	if err := os.MkdirAll(i.imageRoot, 0755); err != nil {
 		return fmt.Errorf("failed to create image rootfs dir: %v", err)
 	}
 
