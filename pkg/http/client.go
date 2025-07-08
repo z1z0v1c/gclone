@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -27,7 +28,13 @@ func NewHttpClient() *Client {
 // SendRequest performs an HTTP request with the given method, URL, and headers.
 // It returns the response or an error if the request fails or the status is not 200 OK.
 func (hc *Client) SendRequest(method string, url string, headers map[string]string) (*http.Response, error) {
-	req, err := http.NewRequest(method, url, nil)
+	return hc.SendRequestWithContext(context.Background(), method, url, headers)
+}
+
+// SendRequestWithContext performs an HTTP request with the given context, method, URL, and headers.
+// It returns the response or an error if the request fails or the status is not 200 OK.
+func (hc *Client) SendRequestWithContext(ctx context.Context, method string, url string, headers map[string]string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {
 		return nil, err
 	}

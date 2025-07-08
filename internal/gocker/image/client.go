@@ -206,17 +206,18 @@ func (i *Client) downloadImage() error {
 	}
 
 	// Wait for either completion or first error
+	done := make(chan struct{})
 	go func() {
 		wg.Wait()
-		close(errChan)
+		close(done)
 	}()
 
-	// Return first error if any
-	if err := <-errChan; err != nil {
+	select {
+	case err := <-errChan:
 		return err
+	case <-done:
+		return nil
 	}
-
-	return nil
 }
 
 func (i *Client) downloadLayer(ctx context.Context, index int, digest string) error {
@@ -233,11 +234,18 @@ func (i *Client) downloadLayer(ctx context.Context, index int, digest string) er
 		"Authorization": "Bearer " + i.token,
 	}
 
-	resp, err := i.httpClient.SendRequest(http.MethodGet, blobsURL+digest, headers)
+	resp, err := i.httpClient.SendRequestWithContext(ctx, http.MethodGet, blobsURL+digest, headers)
 	if err != nil {
 		return fmt.Errorf("failed to download layer: %v", err)
 	}
 	defer resp.Body.Close()
+
+	// Check if context is cancelled
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
