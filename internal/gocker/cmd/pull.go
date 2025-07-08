@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/z1z0v1c/gocker/internal/gocker/image"
@@ -21,6 +22,7 @@ var Pull = &cobra.Command{
 
 // pull is the command handler function that pulls the image.
 func pull(c *cobra.Command, args []string) {
+	start := time.Now()
 	imgName := args[0]
 	httpClient := http.NewHttpClient()
 
@@ -31,4 +33,6 @@ func pull(c *cobra.Command, args []string) {
 
 		os.Exit(1)
 	}
+
+	fmt.Printf("Elapsed time: %f\n", time.Since(start).Seconds())
 }

@@ -2,6 +2,7 @@ package image
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
@@ -46,6 +47,8 @@ type Client struct {
 	config   *registry.ImageConfig
 
 	httpClient *http.Client
+
+	downloadedLayers map[string][]byte
 }
 
 // NewClient creates and initializes a new ImagePuller for the given image name.
@@ -90,7 +93,11 @@ func (i *Client) Pull() error {
 		return err
 	}
 
-	if err := i.downloadAndExtractImage(); err != nil {
+	if err := i.downloadImage(); err != nil {
+		return err
+	}
+	
+	if err := i.extractImage(); err != nil {
 		return err
 	}
 
@@ -170,12 +177,12 @@ func (i *Client) fetchManifestByDigest(digest string) error {
 	return nil
 }
 
-// downloadAndExtractImage downloads and extracts all layers listed in the manifest.
-func (i *Client) downloadAndExtractImage() error {
-	for j, layer := range i.manifest.Layers {
-		fmt.Printf("Downloading layer %d/%d...\n", j+1, len(i.manifest.Layers))
 
-		if err := i.downloadAndExtractLayer(layer.Digest); err != nil {
+func (i *Client) downloadImage() error {
+	i.downloadedLayers = make(map[string][]byte)
+
+	for j, layer := range i.manifest.Layers {
+		if err := i.downloadLayer(j, layer.Digest); err != nil {
 			return err
 		}
 	}
@@ -183,8 +190,9 @@ func (i *Client) downloadAndExtractImage() error {
 	return nil
 }
 
-// downloadAndExtractLayer downloads and extracts a single layer by digest.
-func (i *Client) downloadAndExtractLayer(digest string) error {
+func (i *Client) downloadLayer(index int, digest string) error {
+	fmt.Printf("Downloading layer %d/%d...\n", index+1, len(i.manifest.Layers))
+
 	headers := map[string]string{
 		"Authorization": "Bearer " + i.token,
 	}
@@ -195,24 +203,41 @@ func (i *Client) downloadAndExtractLayer(digest string) error {
 	}
 	defer resp.Body.Close()
 
-	// Verify digest
-	hasher := sha256.New()
-	reader := io.TeeReader(resp.Body, hasher)
-
-	gr, err := gzip.NewReader(reader)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to create gzip reader: %v", err)
+		return fmt.Errorf("failed to read layer %s: %v", digest, err)
 	}
-	defer gr.Close()
 
-	tr := tar.NewReader(gr)
+	// Verify digest
+	hasher := sha256.Sum256(data)
+	actual := "sha256:" + hex.EncodeToString(hasher[:])
+	if actual != digest {
+		return fmt.Errorf("digest mismatch for layer %d: expected %s, got %s", index+1, digest, actual)
+	}
 
-	i.extractLayer(tr, i.imageRoot)
+	i.downloadedLayers[digest] = data
 
-	// Verify the digest
-	actualDigest := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
-	if actualDigest != digest {
-		return fmt.Errorf("digest mismatch: expected %s, got %s", digest, actualDigest)
+	return nil
+}
+
+func (i *Client) extractImage() error {
+	for j, layer := range i.manifest.Layers {
+		data, ok := i.downloadedLayers[layer.Digest]
+		if !ok {
+			return fmt.Errorf("layer data for %s not found", layer.Digest)
+		}
+
+		gr, err := gzip.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return fmt.Errorf("failed to create gzip reader for layer %d: %v", j+1, err)
+		}
+		defer gr.Close()
+
+		tr := tar.NewReader(gr)
+
+		if err := i.extractLayer(tr, i.imageRoot); err != nil {
+			return fmt.Errorf("failed to extract layer %d: %v", j+1, err)
+		}
 	}
 
 	return nil
