@@ -24,34 +24,40 @@ func serve(c *cobra.Command, args []string) {
 	}
 	fmt.Println("Listening on port 80")
 
-	conn, err := ln.Accept()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer conn.Close()
-
 	for {
-		msg, err := bufio.NewReader(conn).ReadString('\n')
+		conn, err := ln.Accept()
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		path := strings.Split(msg, " ")[1]
+		handleConnection(conn)
 
-		if path == "/" {
-			path = "/index.html"
-		}
-
-		path = strings.TrimPrefix(path, "/")
-
-		var resp string
-		data, err := os.ReadFile(path)
-		if err == nil {
-			resp = "HTTP/1.1 404 Not Found\r\n"
-		}
-
-		resp = fmt.Sprintf("HTTP/1.1 200 OK\r\n\r\n%s\r\n", data)
-
-		conn.Write([]byte(resp))
 	}
+}
+
+func handleConnection(conn net.Conn) {
+	defer conn.Close()
+
+	msg, err := bufio.NewReader(conn).ReadString('\n')
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	path := strings.Split(msg, " ")[1]
+
+	if path == "/" {
+		path = "/index.html"
+	}
+
+	path = strings.TrimPrefix(path, "/")
+
+	var resp string
+	data, err := os.ReadFile(path)
+	if err != nil {
+		resp = "HTTP/1.1 404 Not Found\r\n"
+	} else {
+		resp = fmt.Sprintf("HTTP/1.1 200 OK\r\n\r\n%s\r\n", data)
+	}
+
+	conn.Write([]byte(resp))
 }
