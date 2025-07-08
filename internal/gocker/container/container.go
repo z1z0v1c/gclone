@@ -16,7 +16,7 @@ const (
 	cgroupsRoot = "/sys/fs/cgroup"
 )
 
-// Container encapsulates container execution parameters
+// Container encapsulates container execution parameters.
 type Container struct {
 	imgName    string
 	imgRoot    string
@@ -28,6 +28,7 @@ type Container struct {
 	hostname   string
 }
 
+// NewContainer creates a new Container from the given CLI arguments.
 func NewContainer(args []string) (*Container, error) {
 	imgName, cmd, args := args[0], args[1], args[2:]
 
@@ -47,7 +48,7 @@ func NewContainer(args []string) (*Container, error) {
 
 	c.setMinEnv()
 
-	err := c.loadFromConfigFile(cfgPath)
+	err := c.fromConfigFile(cfgPath)
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +56,8 @@ func NewContainer(args []string) (*Container, error) {
 	return c, nil
 }
 
+
+// Run starts the container execution.
 func (c *Container) Run() {
 	var err error
 
@@ -74,6 +77,7 @@ func (c *Container) Run() {
 	}
 }
 
+// runParentProcess sets up cgroups and forks a child process with namespace isolation.
 func (c *Container) runParentProcess() error {
 	c.setupCgroup()
 	defer c.cleanupCgroup()
@@ -102,6 +106,8 @@ func (c *Container) runParentProcess() error {
 	return cmd.Run()
 }
 
+// runChildProcess performs setup for the isolated container
+// environment and executes the target command inside it.
 func (c *Container) runChildProcess() error {
 	if err := c.setupNamespaces(); err != nil {
 		return err
@@ -128,6 +134,7 @@ func (c *Container) runChildProcess() error {
 	return cmd.Run()
 }
 
+// setupNamespaces sets up namespaces isolation.
 func (c *Container) setupNamespaces() error {
 	// Unshare the mount namespace to isolate mounts from host
 	if err := syscall.Unshare(syscall.CLONE_NEWNS); err != nil {
@@ -146,6 +153,7 @@ func (c *Container) setupNamespaces() error {
 	return nil
 }
 
+// setupFilesystem changes the root filesystem to the container's rootfs.
 func (c *Container) setupFilesystem() error {
 	// Change dir to image root directory
 	if err := os.Chdir(c.imgRoot); err != nil {
@@ -169,6 +177,7 @@ func (c *Container) setupFilesystem() error {
 	return nil
 }
 
+// mountProc mounts the /proc filesystem inside the container.
 func (c *Container) mountProc() error {
 	if err := os.MkdirAll("/proc", 0555); err != nil {
 		return fmt.Errorf("failed to create proc dir: %v", err)
@@ -182,13 +191,14 @@ func (c *Container) mountProc() error {
 	return nil
 }
 
+// unmountProc unmounts the /proc filesystem before exiting.
 func (c *Container) unmountProc() {
 	if err := syscall.Unmount("/proc", 0); err != nil {
 		fmt.Printf("WARNING: failed to unmount proc dir: %v\n", err)
 	}
 }
 
-// setMinEnv sets minimal required environment variables
+// setMinEnv sets minimal required environment for the container process.
 func (c *Container) setMinEnv() {
 	var env []string
 
@@ -200,7 +210,9 @@ func (c *Container) setMinEnv() {
 	c.env = env
 }
 
-func (c *Container) loadFromConfigFile(path string) error {
+// fromConfigFile loads environment variables, hostname,
+// and working directory from the image config file.
+func (c *Container) fromConfigFile(path string) error {
 	cfgFile, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("failed to open config file: %s", path)
@@ -227,7 +239,7 @@ func (c *Container) loadFromConfigFile(path string) error {
 	return nil
 }
 
-// setupCgroup creates and configures a new v2 cgroup for the container process
+// setupCgroup creates and configures a new v2 cgroup for the container process.
 func (c *Container) setupCgroup() error {
 	if err := os.MkdirAll(c.cgroupPath, 0755); err != nil {
 		return fmt.Errorf("failed to create cgroup v2 path: %v", err)
@@ -255,7 +267,7 @@ func (c *Container) setupCgroup() error {
 	return nil
 }
 
-// cleanupCgroup removes the custom cgroup created for the container process
+// cleanupCgroup removes the custom cgroup created for the container process.
 func (c *Container) cleanupCgroup() {
 	rootProcs := filepath.Join(cgroupsRoot, "cgroup.procs")
 	selfPid := []byte(strconv.Itoa(os.Getpid()))

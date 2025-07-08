@@ -1,9 +1,12 @@
 package image
 
+// AuthResponse represents the token response from the Docker Registry auth API.
 type AuthResponse struct {
 	Token string `json:"token"`
 }
 
+// Manifest represents a platform-specific image manifest (schema v2).
+// It includes metadata about the config blob and image layers.
 type Manifest struct {
 	SchemaVersion int    `json:"schemaVersion"`
 	MediaType     string `json:"mediaType"`
@@ -19,6 +22,8 @@ type Manifest struct {
 	} `json:"layers"`
 }
 
+// ManifestIndex represents a manifest list (multi-platform index).
+// It maps platforms (e.g., linux/amd64) to specific manifest digests
 type ManifestIndex struct {
 	SchemaVersion int    `json:"schemaVersion"`
 	MediaType     string `json:"mediaType"`
@@ -32,6 +37,7 @@ type ManifestIndex struct {
 	} `json:"manifests"`
 }
 
+// ImageConfig represents the full image configuration
 type ImageConfig struct {
 	Architecture string `json:"architecture"`
 	Config       struct {
