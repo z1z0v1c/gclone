@@ -1,4 +1,4 @@
-package gocker
+package image
 
 import (
 	"archive/tar"
@@ -16,6 +16,8 @@ import (
 )
 
 const (
+	RelativeImagesPath = ".local/share/gocker/images/"
+
 	registry        = "registry-1.docker.io"
 	authBaseURL     = "https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull"
 	manifestBaseURL = "https://%s/v2/%s/manifests/"
@@ -47,7 +49,7 @@ func NewImage(name string, httpClient *http.Client) *Image {
 	tag := "latest"
 	homeDir := os.Getenv("HOME")
 
-	imgPath := filepath.Join(homeDir, relativeImagesPath, name)
+	imgPath := filepath.Join(homeDir, RelativeImagesPath, name)
 	imgRoot := filepath.Join(imgPath, "rootfs")
 	cfgPath := filepath.Join(imgPath, ".config.json")
 	repository := filepath.Join("library", name)
@@ -67,7 +69,7 @@ func NewImage(name string, httpClient *http.Client) *Image {
 	}
 }
 
-func (i *Image) pull() error {
+func (i *Image) Pull() error {
 	fmt.Printf("Pulling %q image from the %q repository in %q registry...\n",
 		i.Name, i.Repository, registry)
 

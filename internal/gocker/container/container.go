@@ -1,4 +1,4 @@
-package gocker
+package container
 
 import (
 	"encoding/json"
@@ -8,11 +8,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
+
+	"github.com/z1z0v1c/gocker/internal/gocker/image"
 )
 
 const (
-	cgroupsRoot        = "/sys/fs/cgroup"
-	relativeImagesPath = ".local/share/gocker/images/"
+	cgroupsRoot = "/sys/fs/cgroup"
 )
 
 // Container encapsulates container execution parameters
@@ -30,8 +31,8 @@ type Container struct {
 func NewContainer(args []string) (*Container, error) {
 	img, cmd, args := args[0], args[1], args[2:]
 
-	imgRoot := filepath.Join(os.Getenv("HOME"), relativeImagesPath, img, "rootfs")
-	cfgPath := filepath.Join(os.Getenv("HOME"), relativeImagesPath, img, ".config.json")
+	imgRoot := filepath.Join(os.Getenv("HOME"), image.RelativeImagesPath, img, "rootfs")
+	cfgPath := filepath.Join(os.Getenv("HOME"), image.RelativeImagesPath, img, ".config.json")
 
 	cgroupName := fmt.Sprintf("gocker%d", os.Getpid())
 	cgroupPath := filepath.Join(cgroupsRoot, cgroupName)
@@ -54,7 +55,7 @@ func NewContainer(args []string) (*Container, error) {
 	return c, nil
 }
 
-func (c *Container) run() {
+func (c *Container) Run() {
 	var err error
 
 	if os.Getenv("IS_CHILD") == "1" {
@@ -68,7 +69,8 @@ func (c *Container) run() {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			os.Exit(exitErr.ExitCode())
 		} else {
-			fatalf("Error: %v", err)
+			fmt.Printf("Error: %v", err)
+			os.Exit(1)
 		}
 	}
 }
@@ -207,7 +209,7 @@ func (c *Container) loadFromConfigFile(path string) error {
 	}
 	defer cfgFile.Close()
 
-	var cfg ImageConfig
+	var cfg image.ImageConfig
 	if err = json.NewDecoder(cfgFile).Decode(&cfg); err != nil {
 		return fmt.Errorf("failed to decode config file: %v", err)
 	}

@@ -1,4 +1,4 @@
-package gocker
+package image
 
 type AuthResponse struct {
 	Token string `json:"token"`

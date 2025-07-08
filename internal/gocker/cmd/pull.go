@@ -1,14 +1,15 @@
-package gocker
+package cmd
 
 import (
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/z1z0v1c/gocker/internal/gocker/image"
 	"github.com/z1z0v1c/gocker/pkg/http"
 )
 
-var PullCmd = &cobra.Command{
+var Pull = &cobra.Command{
 	Use:                   "pull image",
 	Short:                 "Pull an image from Docker Hub",
 	Long:                  "Pull an image from Docker Hub",
@@ -21,9 +22,9 @@ func pull(c *cobra.Command, args []string) {
 	imgName := args[0]
 	httpClient := http.NewHttpClient()
 
-	img := NewImage(imgName, httpClient)
+	img := image.NewImage(imgName, httpClient)
 
-	if err := img.pull(); err != nil {
+	if err := img.Pull(); err != nil {
 		fmt.Printf("Error while pulling %q image: %v\n", img.Name, err)
 		os.Exit(1)
 	}

@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	g "github.com/z1z0v1c/gocker/internal/gocker"
+	"github.com/z1z0v1c/gocker/internal/gocker/cmd"
 )
 
 var gocker = &cobra.Command{
@@ -14,7 +14,7 @@ var gocker = &cobra.Command{
 }
 
 func init() {
-	gocker.AddCommand(g.RunCmd, g.PullCmd)
+	gocker.AddCommand(cmd.Run, cmd.Pull)
 }
 
 func main() {

@@ -1,10 +1,11 @@
-package gocker
+package cmd
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/z1z0v1c/gocker/internal/gocker/container"
 )
 
-var RunCmd = &cobra.Command{
+var Run = &cobra.Command{
 	Use:                "run image command [flags]",
 	Short:              "Run a container from a downloaded image",
 	DisableFlagParsing: true,
@@ -13,10 +14,10 @@ var RunCmd = &cobra.Command{
 }
 
 func run(c *cobra.Command, args []string) {
-	cnt, err := NewContainer(args)
+	cnt, err := container.NewContainer(args)
 	if err != nil {
 		fatalf("Error during container creation: %v\n", err)
 	}
 
-	cnt.run()
+	cnt.Run()
 }
