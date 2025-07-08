@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -30,7 +31,7 @@ func serve(c *cobra.Command, args []string) {
 			log.Fatal(err)
 		}
 
-		handleConnection(conn)
+		go handleConnection(conn)
 
 	}
 }
@@ -50,6 +51,7 @@ func handleConnection(conn net.Conn) {
 	}
 
 	path = strings.TrimPrefix(path, "/")
+	fmt.Printf("Path: %s\n", path)
 
 	var resp string
 	data, err := os.ReadFile(path)
@@ -58,6 +60,8 @@ func handleConnection(conn net.Conn) {
 	} else {
 		resp = fmt.Sprintf("HTTP/1.1 200 OK\r\n\r\n%s\r\n", data)
 	}
+
+	time.Sleep(5 * time.Second)
 
 	conn.Write([]byte(resp))
 }
