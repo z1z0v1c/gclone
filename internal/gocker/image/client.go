@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/z1z0v1c/gclone/internal/gocker/registry"
 	"github.com/z1z0v1c/gclone/pkg/http"
@@ -49,6 +51,7 @@ type Client struct {
 	httpClient *http.Client
 
 	downloadedLayers map[string][]byte
+	mutex            sync.Mutex
 }
 
 // NewClient creates and initializes a new ImagePuller for the given image name.
@@ -180,17 +183,51 @@ func (i *Client) fetchManifestByDigest(digest string) error {
 func (i *Client) downloadImage() error {
 	i.downloadedLayers = make(map[string][]byte)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, 1)
+
 	for j, layer := range i.manifest.Layers {
-		if err := i.downloadLayer(j, layer.Digest); err != nil {
-			return err
-		}
+		wg.Add(1)
+
+		go func(index int, digest string) {
+			defer wg.Done()
+
+			if err := i.downloadLayer(ctx, index, digest); err != nil {
+				select {
+				case errChan <- err:
+					cancel() // Cancel context to signal other goroutines to stop
+				default:
+				}
+			}
+		}(j, layer.Digest)
+	}
+
+	// Wait for either completion or first error
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	// Return first error if any
+	if err := <-errChan; err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func (i *Client) downloadLayer(index int, digest string) error {
+func (i *Client) downloadLayer(ctx context.Context, index int, digest string) error {
 	fmt.Printf("Downloading layer %d/%d...\n", index+1, len(i.manifest.Layers))
+
+	// Check if context is cancelled
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 
 	headers := map[string]string{
 		"Authorization": "Bearer " + i.token,
@@ -214,7 +251,10 @@ func (i *Client) downloadLayer(index int, digest string) error {
 		return fmt.Errorf("digest mismatch for layer %d: expected %s, got %s", index+1, digest, actual)
 	}
 
+	// Thread-safe write to map
+	i.mutex.Lock()
 	i.downloadedLayers[digest] = data
+	i.mutex.Unlock()
 
 	return nil
 }
