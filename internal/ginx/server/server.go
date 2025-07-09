@@ -3,12 +3,13 @@ package server
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/z1z0v1c/gclone/pkg/http"
 )
 
 type Server struct {
@@ -29,12 +30,12 @@ func (s *Server) Start() error {
 		return fmt.Errorf("failed to start server on port %d: %v", s.port, err)
 	}
 
-	fmt.Printf("Listening on port: %d\n", s.port)
+	fmt.Printf("[INFO] Listening on port: %d\n", s.port)
 
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("failed to establish the connection: %v", err)
 		}
 
 		go s.handleConnection(conn)
@@ -44,22 +45,40 @@ func (s *Server) Start() error {
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	msg, err := bufio.NewReader(conn).ReadString('\n')
+	req, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
-		fmt.Printf("Failed to read request: %v", err)
+		fmt.Printf("[ERROR] Failed to read request: %v\n", err)
 
 		s.sendErrorResponse(conn, "400 Bad Request")
 		return
 	}
 
-	path := strings.Split(msg, " ")[1]
+	parts := strings.Split(req, " ")
+	if len(parts) < 3 {
+		fmt.Printf("[ERROR] Incomplete request: %v\n", err)
+
+		s.sendErrorResponse(conn, "400 Bad Request")
+		return
+	}
+
+	method, path, httpVersion := parts[0], parts[1], strings.TrimSpace(parts[2])
+	fmt.Printf("[INFO] Request: %s %s %s\n", method, path, httpVersion)
+
+	// Only support GET requests for now
+	if method != http.MethodGet {
+		fmt.Printf("[ERROR] Request method not allowed: %s\n", method)
+
+		s.sendErrorResponse(conn, "405 Method Not Allowed")
+		return
+	}
+
 	if path == "/" {
 		path = "/index.html"
 	}
 
 	wwwRoot, err := filepath.Abs(s.wwwRoot)
 	if err != nil {
-		fmt.Printf("Invalid www root: %v", err)
+		fmt.Printf("[ERROR] Invalid www root: %v\n", err)
 
 		s.sendErrorResponse(conn, "400 Bad Request")
 		return
@@ -70,7 +89,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// Prevent directory traversal
 	path, err = filepath.Abs(path)
 	if err != nil || !strings.HasPrefix(path, wwwRoot) {
-		fmt.Printf("Forbidden path: %s %v", path, err)
+		fmt.Printf("[ERROR] Forbidden path: %s %v", path, err)
 
 		s.sendErrorResponse(conn, "403 Forbidden")
 		return
@@ -80,7 +99,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Printf("File not found: %s %v", path, err)
+		fmt.Printf("[ERROR] File not found: %s %v", path, err)
 
 		s.sendErrorResponse(conn, "404 Not Found")
 		return

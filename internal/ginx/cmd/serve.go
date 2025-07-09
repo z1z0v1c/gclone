@@ -8,8 +8,10 @@ import (
 	"github.com/z1z0v1c/gclone/internal/ginx/server"
 )
 
-var port uint16
-var wwwRoot string
+var (
+	port    uint16
+	wwwRoot string
+)
 
 var Serve = &cobra.Command{
 	Use:   "serve",
@@ -26,7 +28,7 @@ func serve(c *cobra.Command, args []string) {
 	s := server.NewServer(port, wwwRoot)
 
 	if err := s.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
 
 		os.Exit(1)
 	}
