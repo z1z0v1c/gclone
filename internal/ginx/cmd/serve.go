@@ -1,15 +1,11 @@
 package cmd
 
 import (
-	"bufio"
 	"fmt"
-	"log"
-	"net"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/z1z0v1c/gclone/internal/ginx/server"
 )
 
 var Serve = &cobra.Command{
@@ -19,60 +15,14 @@ var Serve = &cobra.Command{
 }
 
 func serve(c *cobra.Command, args []string) {
-	ln, err := net.Listen("tcp", ":80")
-	if err != nil {
-		log.Fatal(err)
+	port := 80
+	wwwRoot := "./internal/ginx/www"
+
+	s := server.NewServer(port, wwwRoot)
+
+	if err := s.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+
+		os.Exit(1)
 	}
-	fmt.Println("Listening on port 80")
-
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		go handleConnection(conn)
-
-	}
-}
-
-func handleConnection(conn net.Conn) {
-	var resp string
-	defer conn.Close()
-
-	msg, err := bufio.NewReader(conn).ReadString('\n')
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	path := strings.Split(msg, " ")[1]
-
-	if path == "/" {
-		path = "/index.html"
-	}
-
-	wwwRoot, err := filepath.Abs("./internal/ginx/www")
-	if err != nil {
-		log.Fatal("Invalid www root:", err)
-	}
-
-	path = filepath.Join(wwwRoot, path)
-
-	// Prevent directory traversal
-	path, err = filepath.Abs(path)
-	if err != nil || !strings.HasPrefix(path, wwwRoot) {
-		resp = "HTTP/1.1 403 Forbidden\r\n"
-		conn.Write([]byte(resp))
-	}
-	fmt.Printf("Path: %s\n", path)
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		resp = "HTTP/1.1 404 Not Found\r\n"
-	} else {
-		resp = fmt.Sprintf("HTTP/1.1 200 OK\r\n\r\n%s\r\n", data)
-	}
-
-	conn.Write([]byte(resp))
 }
