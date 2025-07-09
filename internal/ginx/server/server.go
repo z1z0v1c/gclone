@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -88,11 +89,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 		return
 	}
 
-	data, err := os.ReadFile(path)
+	data, resp, err := s.readDataFromFile(path)
 	if err != nil {
-		fmt.Printf("[ERROR] File not found: %s %v\n", path, err)
+		fmt.Printf("[ERROR] %v\n", err)
 
-		s.sendErrorResponse(conn, "404 Not Found")
+		s.sendErrorResponse(conn, resp)
 		return
 	}
 
@@ -112,14 +113,43 @@ func (s *Server) getCleanAbsPath(path string) (string, string, error) {
 	if err != nil {
 		return "", "404 Bad Request", err
 	}
-	
+
 	if !strings.HasPrefix(path, s.wwwRoot) {
 		return "", "403 Forbidden", fmt.Errorf("forbidden path: %s %v", path, err)
 	}
 
-	fmt.Printf("Path: %s\n", path)
+	fmt.Printf("[INFO] Path: %s\n", path)
 
 	return path, "", nil
+}
+
+func (s *Server) readDataFromFile(path string) ([]byte, string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, "404 Not Found", err
+		} else {
+			return nil, "500 Internal Server Error", err
+		}
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, "500 Internal Server Error", err
+	}
+
+	// Don't serve directories
+	if fileInfo.IsDir() {
+		return nil, "403 Forbidden", err
+	}
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, "500 Internal Server Error", err
+	}
+
+	return data, "", nil
 }
 
 func (s *Server) sendSuccessResponse(conn net.Conn, data []byte) {
