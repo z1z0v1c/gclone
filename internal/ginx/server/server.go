@@ -12,11 +12,11 @@ import (
 )
 
 type Server struct {
-	port    int
+	port    uint16
 	wwwRoot string
 }
 
-func NewServer(port int, wwwRoot string) *Server {
+func NewServer(port uint16, wwwRoot string) *Server {
 	return &Server{
 		port:    port,
 		wwwRoot: wwwRoot,
@@ -24,7 +24,7 @@ func NewServer(port int, wwwRoot string) *Server {
 }
 
 func (s *Server) Start() error {
-	ln, err := net.Listen("tcp", ":"+strconv.Itoa(s.port))
+	ln, err := net.Listen("tcp", ":"+strconv.Itoa(int(s.port)))
 	if err != nil {
 		return fmt.Errorf("failed to start server on port %d: %v", s.port, err)
 	}

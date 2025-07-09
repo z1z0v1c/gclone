@@ -21,7 +21,7 @@ func init() {
 
 func main() {
 	if err := ginx.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v", err); os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 }
-

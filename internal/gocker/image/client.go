@@ -79,7 +79,7 @@ func NewClient(imgName string, httpClient *http.Client) *Client {
 	}
 }
 
-// Pull downloads and extracts the image.
+// Pull downloads and extracts an image.
 func (i *Client) Pull() error {
 	fmt.Printf("Pulling from %s using default tag: %s\n", i.repository, i.imageTag)
 
