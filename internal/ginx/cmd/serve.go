@@ -25,11 +25,14 @@ func init() {
 }
 
 func serve(c *cobra.Command, args []string) {
-	s := server.NewServer(port, wwwRoot)
+	s, err := server.NewServer(port, wwwRoot)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+		os.Exit(1)
+	}
 
 	if err := s.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
-
 		os.Exit(1)
 	}
 }

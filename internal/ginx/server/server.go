@@ -17,11 +17,19 @@ type Server struct {
 	wwwRoot string
 }
 
-func NewServer(port uint16, wwwRoot string) *Server {
-	return &Server{
+func NewServer(port uint16, wwwRoot string) (*Server, error) {
+	wwwRoot, err := filepath.Abs(wwwRoot)
+	if err != nil {
+		return nil, fmt.Errorf("invalid www root: %v", err)
+
+	}
+
+	s := &Server{
 		port:    port,
 		wwwRoot: wwwRoot,
 	}
+
+	return s, nil
 }
 
 func (s *Server) Start() error {
@@ -72,40 +80,46 @@ func (s *Server) handleConnection(conn net.Conn) {
 		return
 	}
 
-	if path == "/" {
-		path = "/index.html"
-	}
-
-	wwwRoot, err := filepath.Abs(s.wwwRoot)
+	path, resp, err := s.getCleanAbsPath(path)
 	if err != nil {
-		fmt.Printf("[ERROR] Invalid www root: %v\n", err)
+		fmt.Printf("[ERROR] %v\n", err)
 
-		s.sendErrorResponse(conn, "400 Bad Request")
+		s.sendErrorResponse(conn, resp)
 		return
 	}
-
-	path = filepath.Join(wwwRoot, path)
-
-	// Prevent directory traversal
-	path, err = filepath.Abs(path)
-	if err != nil || !strings.HasPrefix(path, wwwRoot) {
-		fmt.Printf("[ERROR] Forbidden path: %s %v", path, err)
-
-		s.sendErrorResponse(conn, "403 Forbidden")
-		return
-	}
-
-	fmt.Printf("Path: %s\n", path)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Printf("[ERROR] File not found: %s %v", path, err)
+		fmt.Printf("[ERROR] File not found: %s %v\n", path, err)
 
 		s.sendErrorResponse(conn, "404 Not Found")
 		return
 	}
 
 	s.sendSuccessResponse(conn, data)
+}
+
+func (s *Server) getCleanAbsPath(path string) (string, string, error) {
+	if path == "/" {
+		path = "/index.html"
+	}
+
+	path = filepath.Clean(path)
+	path = filepath.Join(s.wwwRoot, path)
+
+	// Prevent directory traversal
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return "", "404 Bad Request", err
+	}
+	
+	if !strings.HasPrefix(path, s.wwwRoot) {
+		return "", "403 Forbidden", fmt.Errorf("forbidden path: %s %v", path, err)
+	}
+
+	fmt.Printf("Path: %s\n", path)
+
+	return path, "", nil
 }
 
 func (s *Server) sendSuccessResponse(conn net.Conn, data []byte) {
