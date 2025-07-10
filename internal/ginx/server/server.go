@@ -80,27 +80,26 @@ func (s *Server) handleConnection(conn net.Conn) {
 		return
 	}
 
-	path, resp, err := s.getCleanAbsPath(path)
+	path, status, err := s.getAbsPath(path)
 	if err != nil {
-		s.logAndSendErrorResponse(conn, err.Error(), resp)
+		s.logAndSendErrorResponse(conn, err.Error(), status)
 		return
 	}
 
-	data, resp, err := s.readDataFromFile(path)
+	data, status, err := s.readDataFromFile(path)
 	if err != nil {
-		s.logAndSendErrorResponse(conn, err.Error(), resp)
+		s.logAndSendErrorResponse(conn, err.Error(), status)
 		return
 	}
 
 	s.sendSuccessResponse(conn, data)
 }
 
-func (s *Server) getCleanAbsPath(path string) (string, string, error) {
+func (s *Server) getAbsPath(path string) (string, string, error) {
 	if path == "/" {
 		path = "/index.html"
 	}
 
-	path = filepath.Clean(path)
 	path = filepath.Join(s.wwwRoot, path)
 
 	path, err := filepath.Abs(path)
