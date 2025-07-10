@@ -65,7 +65,7 @@ func TestNewServer(t *testing.T) {
 }
 
 func TestGetAbsPath(t *testing.T) {
-	server, tempDir := setupTestServer(t)
+	s, tempDir := setupTestServer(t)
 	defer os.RemoveAll(tempDir)
 
 	tests := []struct {
@@ -103,7 +103,7 @@ func TestGetAbsPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			path, status, err := server.getAbsPath(tt.inputPath)
+			path, status, err := s.getAbsPath(tt.inputPath)
 
 			if tt.expectError {
 				if err == nil {
@@ -123,3 +123,73 @@ func TestGetAbsPath(t *testing.T) {
 		})
 	}
 }
+
+func TestReadDataFromFile(t *testing.T) {
+	s, tempDir := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Create test file
+	testContent := "Hello, World!"
+	testFile := filepath.Join(tempDir, "test.html")
+	err := os.WriteFile(testFile, []byte(testContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Create test directory
+	testDir := filepath.Join(tempDir, "testdir")
+	err = os.Mkdir(testDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
+
+	tests := []struct {
+		name           string
+		filePath       string
+		expectError    bool
+		expectedStatus string
+		expectedData   []byte
+	}{
+		{
+			name:         "read existing file",
+			filePath:     testFile,
+			expectError:  false,
+			expectedData: []byte(testContent),
+		},
+		{
+			name:           "file not found",
+			filePath:       filepath.Join(tempDir, "nonexisting.html"),
+			expectError:    true,
+			expectedStatus: "404 Not Found",
+		},
+		{
+			name:           "read directory",
+			filePath:       testDir,
+			expectError:    true,
+			expectedStatus: "403 Forbidden",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, status, err := s.readDataFromFile(tt.filePath)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("Expected error but got nil")
+				}
+				if status != tt.expectedStatus {
+					t.Errorf("Expected status %s, got %s", tt.expectedStatus, status)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error but got: %v", err)
+				}
+				if string(data) != string(tt.expectedData) {
+					t.Errorf("Expected data %s, got %s", tt.expectedData, data)
+				}
+			}
+		})
+	}
+}
+

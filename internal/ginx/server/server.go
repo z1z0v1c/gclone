@@ -135,7 +135,7 @@ func (s *Server) readDataFromFile(path string) ([]byte, string, error) {
 
 	// Don't serve directories
 	if fileInfo.IsDir() {
-		return nil, "403 Forbidden", err
+		return nil, "403 Forbidden", fmt.Errorf("directory read attempt")
 	}
 
 	data, err := io.ReadAll(file)
