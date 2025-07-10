@@ -56,17 +56,13 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	req, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
-		fmt.Printf("[ERROR] Failed to read request: %v\n", err)
-
-		s.sendErrorResponse(conn, "400 Bad Request")
+		s.logAndSendErrorResponse(conn, "Failed to read request: "+err.Error(), "400 Bad Request")
 		return
 	}
 
 	parts := strings.Split(req, " ")
 	if len(parts) < 3 {
-		fmt.Printf("[ERROR] Incomplete request: %v\n", err)
-
-		s.sendErrorResponse(conn, "400 Bad Request")
+		s.logAndSendErrorResponse(conn, "Incomplete request", "400 Bad Request")
 		return
 	}
 
@@ -75,25 +71,19 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	// Only support GET requests for now
 	if method != http.MethodGet {
-		fmt.Printf("[ERROR] Request method not allowed: %s\n", method)
-
-		s.sendErrorResponse(conn, "405 Method Not Allowed")
+		s.logAndSendErrorResponse(conn, "Request method not allowed: "+method, "405 Method Not Allowed")
 		return
 	}
 
 	path, resp, err := s.getCleanAbsPath(path)
 	if err != nil {
-		fmt.Printf("[ERROR] %v\n", err)
-
-		s.sendErrorResponse(conn, resp)
+		s.logAndSendErrorResponse(conn, err.Error(), resp)
 		return
 	}
 
 	data, resp, err := s.readDataFromFile(path)
 	if err != nil {
-		fmt.Printf("[ERROR] %v\n", err)
-
-		s.sendErrorResponse(conn, resp)
+		s.logAndSendErrorResponse(conn, err.Error(), resp)
 		return
 	}
 
@@ -149,12 +139,19 @@ func (s *Server) readDataFromFile(path string) ([]byte, string, error) {
 		return nil, "500 Internal Server Error", err
 	}
 
+	fmt.Printf("[INFO] Read %d bytes of data from the file", len(data))
+
 	return data, "", nil
 }
 
 func (s *Server) sendSuccessResponse(conn net.Conn, data []byte) {
 	resp := fmt.Sprintf("HTTP/1.1 200 OK\r\n\r\n%s\r\n", data)
 	conn.Write([]byte(resp))
+}
+
+func (s *Server) logAndSendErrorResponse(conn net.Conn, logMsg, status string) {
+	fmt.Printf("[ERROR] %s\n", logMsg)
+	s.sendErrorResponse(conn, status)
 }
 
 func (s *Server) sendErrorResponse(conn net.Conn, status string) {
