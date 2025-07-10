@@ -25,6 +25,11 @@ func NewServer(port uint16, wwwRoot string) (*Server, error) {
 
 	}
 
+	_, err = os.Stat(wwwRoot)
+	if err != nil {
+		return nil, fmt.Errorf("invalid www root: %v", err)
+	}
+
 	s := &Server{
 		port:    port,
 		wwwRoot: wwwRoot,
@@ -98,12 +103,12 @@ func (s *Server) getCleanAbsPath(path string) (string, string, error) {
 	path = filepath.Clean(path)
 	path = filepath.Join(s.wwwRoot, path)
 
-	// Prevent directory traversal
 	path, err := filepath.Abs(path)
 	if err != nil {
 		return "", "404 Bad Request", err
 	}
 
+	// Prevent directory traversal
 	if !strings.HasPrefix(path, s.wwwRoot) {
 		return "", "403 Forbidden", fmt.Errorf("forbidden path: %s %v", path, err)
 	}
