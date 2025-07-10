@@ -139,7 +139,7 @@ func (s *Server) readDataFromFile(path string) ([]byte, string, error) {
 		return nil, "500 Internal Server Error", err
 	}
 
-	fmt.Printf("[INFO] Read %d bytes of data from the file", len(data))
+	fmt.Printf("[INFO] Read %d bytes of data from the file\n", len(data))
 
 	return data, "", nil
 }

@@ -13,18 +13,18 @@ var (
 	wwwRoot string
 )
 
-var Serve = &cobra.Command{
-	Use:   "serve",
-	Short: "Serve runs a Ginx instance",
-	Run:   serve,
+var Start = &cobra.Command{
+	Use:   "start [flags]",
+	Short: "Start starts a Ginx instance",
+	Run:   start,
 }
 
 func init() {
-	Serve.PersistentFlags().Uint16VarP(&port, "port", "p", 80, "Port number")
-	Serve.PersistentFlags().StringVarP(&wwwRoot, "root", "r", "./internal/ginx/www", "Root directory")
+	Start.PersistentFlags().Uint16VarP(&port, "port", "p", 80, "Port number")
+	Start.PersistentFlags().StringVarP(&wwwRoot, "root", "r", "./internal/ginx/www", "Root directory")
 }
 
-func serve(c *cobra.Command, args []string) {
+func start(c *cobra.Command, args []string) {
 	s, err := server.NewServer(port, wwwRoot)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)

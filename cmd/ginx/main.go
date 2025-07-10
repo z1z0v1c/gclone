@@ -10,13 +10,13 @@ import (
 
 // ginx is the root Cobra command for the Ginx Web Server
 var ginx = &cobra.Command{
-	Use:   "ginx command",
+	Use:   "ginx command [flags]",
 	Short: "Simple Web Server",
 }
 
 // init registers the subcommands within the root command.
 func init() {
-	ginx.AddCommand(cmd.Serve)
+	ginx.AddCommand(cmd.Start)
 }
 
 func main() {
