@@ -1,9 +1,14 @@
 package server
 
 import (
+	"bufio"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 )
 
 // setupTestServer is a helper func that creates a test server
@@ -193,3 +198,126 @@ func TestReadDataFromFile(t *testing.T) {
 	}
 }
 
+func TestServerIntegration(t *testing.T) {
+	s, tempDir := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Create test files
+	indexContent := "<html><body>Index Page</body></html>"
+	testContent := "<html><body>Test Page</body></html>"
+
+	err := os.WriteFile(filepath.Join(tempDir, "index.html"), []byte(indexContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create index.html: %v", err)
+	}
+
+	err = os.WriteFile(filepath.Join(tempDir, "test.html"), []byte(testContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test.html: %v", err)
+	}
+
+	ln, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+	defer ln.Close()
+
+	// Start server in a goroutine
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go s.handleConnection(conn)
+		}
+	}()
+
+	// Get the actual port
+	addr := ln.Addr().(*net.TCPAddr)
+	port := addr.Port
+
+	// Test cases
+	tests := []struct {
+		name           string
+		request        string
+		expectedStatus string
+		expectedBody   string
+	}{
+		{
+			name:           "GET index page",
+			request:        "GET / HTTP/1.1\r\n\r\n",
+			expectedStatus: "200 OK",
+			expectedBody:   indexContent,
+		},
+		{
+			name:           "GET test page",
+			request:        "GET /test.html HTTP/1.1\r\n\r\n",
+			expectedStatus: "200 OK",
+			expectedBody:   testContent,
+		},
+		{
+			name:           "GET non-existent page",
+			request:        "GET /nonexistent.html HTTP/1.1\r\n\r\n",
+			expectedStatus: "404 Not Found",
+		},
+		{
+			name:           "POST request (not allowed)",
+			request:        "POST / HTTP/1.1\r\n\r\n",
+			expectedStatus: "405 Method Not Allowed",
+		},
+		{
+			name:           "Directory traversal attempt",
+			request:        "GET /../etc/passwd HTTP/1.1\r\n\r\n",
+			expectedStatus: "403 Forbidden",
+		},
+		{
+			name:           "Malformed request",
+			request:        "GET\r\n\r\n",
+			expectedStatus: "400 Bad Request",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Connect to server
+			conn, err := net.Dial("tcp", "0.0.0.0:"+strconv.Itoa(port))
+			if err != nil {
+				t.Fatalf("Failed to connect to server: %v", err)
+			}
+			defer conn.Close()
+
+			// Send request
+			_, err = conn.Write([]byte(tt.request))
+			if err != nil {
+				t.Fatalf("Failed to send request: %v", err)
+			}
+
+			// Read response
+			conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+			reader := bufio.NewReader(conn)
+			header, err := reader.ReadString('\n')
+			if err != nil {
+				t.Fatalf("Failed to read response header: %v", err)
+			}
+
+			// Check status
+			if !strings.Contains(header, tt.expectedStatus) {
+				t.Errorf("Expected status %s in response, got: %s", tt.expectedStatus, header)
+			}
+
+			// Check body for successful requests
+			if tt.expectedBody != "" {
+				// Throw away first empty line
+				_, _ = reader.ReadString('\n')
+				body, err := reader.ReadString('\n')
+				if err != nil {
+					t.Fatalf("Failed to read response body: %v", err)
+				}
+				if !strings.Contains(body, tt.expectedBody) {
+					t.Errorf("Expected body to contain %s, got: %s", tt.expectedBody, header)
+				}
+			}
+		})
+	}
+}
