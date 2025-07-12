@@ -367,7 +367,7 @@ func (i *Client) fetchConfig() error {
 	i.config = &registry.ImageConfig{}
 	i.httpClient.SendRequestAndDecode(i.config, http.MethodGet, blobsURL+digest, headers)
 
-	cfgData, err := json.MarshalIndent(i.config, "", "  ")
+	cfgData, err := json.MarshalIndent(i.config, "", "\t")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %v", err)
 	}
