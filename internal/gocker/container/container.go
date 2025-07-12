@@ -19,17 +19,15 @@ const (
 
 // Container encapsulates container execution parameters.
 type Container struct {
+	registry.Config
 	imgName    string
 	imgRoot    string
 	cgroupPath string
 	cmd        string
 	args       []string
-	env        []string
-	workingDir string
-	hostname   string
 }
 
-// NewContainer creates a new Container from the given CLI arguments.
+// NewContainer creates a new Container from the given arguments.
 func NewContainer(imgName, cmd string, args []string) (*Container, error) {
 	imgRoot := filepath.Join(os.Getenv("HOME"), image.RelativeImagesPath, imgName, "rootfs")
 	cfgPath := filepath.Join(os.Getenv("HOME"), image.RelativeImagesPath, imgName, ".config.json")
@@ -45,12 +43,13 @@ func NewContainer(imgName, cmd string, args []string) (*Container, error) {
 		args:       args,
 	}
 
-	c.setMinEnv()
-
-	err := c.fromConfigFile(cfgPath)
+	err := c.fromFile(cfgPath)
 	if err != nil {
 		return nil, err
 	}
+
+	// Append minimal required environment variables
+	c.Env = append(c.Env, "HOME=/root", "USER=root", "SHELL=/bin/sh", "TERM=xterm")
 
 	return c, nil
 }
@@ -76,7 +75,7 @@ func (c *Container) runParentProcess() error {
 	// Recreate the command for the child process
 	cmd := exec.Command("/proc/self/exe", os.Args[1:]...)
 
-	cmd.Env = append(c.env, "IS_CHILD=1")
+	cmd.Env = append(c.Env, "IS_CHILD=1")
 
 	// Forward all standard streams exactly as they are
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
@@ -119,8 +118,7 @@ func (c *Container) runChildProcess() error {
 	// Forward all standard streams exactly as they are
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 
-	// Set command's env and dir
-	cmd.Env, cmd.Dir = c.env, c.workingDir
+	cmd.Env, cmd.Dir = c.Env, c.WorkingDir
 
 	return cmd.Run()
 }
@@ -137,7 +135,7 @@ func (c *Container) setupNamespaces() error {
 		return fmt.Errorf("failed to make mounts private: %v", err)
 	}
 
-	if err := syscall.Sethostname([]byte(c.hostname)); err != nil {
+	if err := syscall.Sethostname([]byte(c.Hostname)); err != nil {
 		return fmt.Errorf("failed to set hostname: %v", err)
 	}
 
@@ -146,7 +144,6 @@ func (c *Container) setupNamespaces() error {
 
 // setupFilesystem changes the root filesystem to the container's rootfs.
 func (c *Container) setupFilesystem() error {
-	// Change dir to image root directory
 	if err := os.Chdir(c.imgRoot); err != nil {
 		return fmt.Errorf("failed to change dir: %v", err)
 	}
@@ -156,12 +153,11 @@ func (c *Container) setupFilesystem() error {
 		return fmt.Errorf("failed to change root: %v", err)
 	}
 
-	// Change dir to root directory in the new filesystem
 	if err := os.Chdir("/"); err != nil {
 		return fmt.Errorf("failed to change dir: %v", err)
 	}
 
-	if err := os.Chdir(c.workingDir); err != nil {
+	if err := os.Chdir(c.WorkingDir); err != nil {
 		fmt.Printf("WARNING: failed to chdir to working dir: %v\n", err)
 	}
 
@@ -174,7 +170,7 @@ func (c *Container) mountProc() error {
 		return fmt.Errorf("failed to create proc dir: %v", err)
 	}
 
-	// Mount proc dir inside rootfs
+	// Mount proc filesystem inside image's rootfs
 	if err := syscall.Mount("proc", "/proc", "proc", 0, ""); err != nil {
 		return fmt.Errorf("failed to mount proc dir: %v", err)
 	}
@@ -189,24 +185,12 @@ func (c *Container) unmountProc() {
 	}
 }
 
-// setMinEnv sets minimal required environment for the container process.
-func (c *Container) setMinEnv() {
-	var env []string
-
-	env = append(env, "HOME=/root")
-	env = append(env, "USER=root")
-	env = append(env, "SHELL=/bin/sh")
-	env = append(env, "TERM=xterm")
-
-	c.env = env
-}
-
-// fromConfigFile loads environment variables, hostname,
+// fromFile loads environment variables, hostname,
 // and working directory from the image config file.
-func (c *Container) fromConfigFile(path string) error {
-	cfgFile, err := os.Open(path)
+func (c *Container) fromFile(cfgPath string) error {
+	cfgFile, err := os.Open(cfgPath)
 	if err != nil {
-		return fmt.Errorf("failed to open config file: %s", path)
+		return fmt.Errorf("failed to open config file: %s", cfgPath)
 	}
 	defer cfgFile.Close()
 
@@ -215,16 +199,13 @@ func (c *Container) fromConfigFile(path string) error {
 		return fmt.Errorf("failed to decode config file: %v", err)
 	}
 
-	c.env = append(c.env, cfg.Config.Env...)
+	c.Config = cfg.Config
 
-	c.workingDir = cfg.Config.WorkingDir
-	if c.workingDir == "" {
-		c.workingDir = "/"
+	if c.WorkingDir == "" {
+		c.WorkingDir = "/"
 	}
-
-	c.hostname = cfg.Config.Hostname
-	if c.hostname == "" {
-		c.hostname = c.imgName + "-container"
+	if c.Hostname == "" {
+		c.Hostname = c.imgName + "-container"
 	}
 
 	return nil

@@ -39,51 +39,35 @@ type ManifestIndex struct {
 	} `json:"manifests"`
 }
 
+type Config struct {
+	Hostname     string              `json:"Hostname"`
+	Domainname   string              `json:"Domainname"`
+	User         string              `json:"User"`
+	AttachStdin  bool                `json:"AttachStdin"`
+	AttachStdout bool                `json:"AttachStdout"`
+	AttachStderr bool                `json:"AttachStderr"`
+	Tty          bool                `json:"Tty"`
+	OpenStdin    bool                `json:"OpenStdin"`
+	StdinOnce    bool                `json:"StdinOnce"`
+	Env          []string            `json:"Env"`
+	Cmd          []string            `json:"Cmd"`
+	Image        string              `json:"Image"`
+	Volumes      map[string]struct{} `json:"Volumes"`
+	WorkingDir   string              `json:"WorkingDir"`
+	Entrypoint   []string            `json:"Entrypoint"`
+	OnBuild      []string            `json:"OnBuild"`
+	Labels       map[string]string   `json:"Labels"`
+}
+
 // ImageConfig represents the full image configuration.
 type ImageConfig struct {
-	Architecture string `json:"architecture"`
-	Config       struct {
-		Hostname     string              `json:"Hostname"`
-		Domainname   string              `json:"Domainname"`
-		User         string              `json:"User"`
-		AttachStdin  bool                `json:"AttachStdin"`
-		AttachStdout bool                `json:"AttachStdout"`
-		AttachStderr bool                `json:"AttachStderr"`
-		Tty          bool                `json:"Tty"`
-		OpenStdin    bool                `json:"OpenStdin"`
-		StdinOnce    bool                `json:"StdinOnce"`
-		Env          []string            `json:"Env"`
-		Cmd          []string            `json:"Cmd"`
-		Image        string              `json:"Image"`
-		Volumes      map[string]struct{} `json:"Volumes"`
-		WorkingDir   string              `json:"WorkingDir"`
-		Entrypoint   []string            `json:"Entrypoint"`
-		OnBuild      []string            `json:"OnBuild"`
-		Labels       map[string]string   `json:"Labels"`
-	} `json:"config"`
+	Architecture    string `json:"architecture"`
+	Config          Config `json:"config"`
 	Container       string `json:"container"`
-	ContainerConfig struct {
-		Hostname     string              `json:"Hostname"`
-		Domainname   string              `json:"Domainname"`
-		User         string              `json:"User"`
-		AttachStdin  bool                `json:"AttachStdin"`
-		AttachStdout bool                `json:"AttachStdout"`
-		AttachStderr bool                `json:"AttachStderr"`
-		Tty          bool                `json:"Tty"`
-		OpenStdin    bool                `json:"OpenStdin"`
-		StdinOnce    bool                `json:"StdinOnce"`
-		Env          []string            `json:"Env"`
-		Cmd          []string            `json:"Cmd"`
-		Image        string              `json:"Image"`
-		Volumes      map[string]struct{} `json:"Volumes"`
-		WorkingDir   string              `json:"WorkingDir"`
-		Entrypoint   []string            `json:"Entrypoint"`
-		OnBuild      []string            `json:"OnBuild"`
-		Labels       map[string]string   `json:"Labels"`
-	} `json:"container_config"`
-	Created       string `json:"created"`
-	DockerVersion string `json:"docker_version"`
-	History       []struct {
+	ContainerConfig Config `json:"container_config"`
+	Created         string `json:"created"`
+	DockerVersion   string `json:"docker_version"`
+	History         []struct {
 		Created    string `json:"created"`
 		CreatedBy  string `json:"created_by"`
 		EmptyLayer bool   `json:"empty_layer,omitempty"`
