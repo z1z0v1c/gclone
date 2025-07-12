@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// setupTestServer is a helper func that creates a test server
+// setupTestServer is a helper func that creates a test server.
 func setupTestServer(t *testing.T) (*Server, string) {
 	tempDir, err := os.MkdirTemp("", "server_test")
 	if err != nil {
@@ -27,6 +27,7 @@ func setupTestServer(t *testing.T) (*Server, string) {
 	return server, tempDir
 }
 
+// TestNewServer tests NewServer func for a new server creation.
 func TestNewServer(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -69,6 +70,7 @@ func TestNewServer(t *testing.T) {
 	}
 }
 
+// TestGetAbsPath tests absolute path retrieval and security validation.
 func TestGetAbsPath(t *testing.T) {
 	s, tempDir := setupTestServer(t)
 	defer os.RemoveAll(tempDir)
@@ -129,6 +131,7 @@ func TestGetAbsPath(t *testing.T) {
 	}
 }
 
+// TestReadDataFromFile tests data retreival from the requested file.
 func TestReadDataFromFile(t *testing.T) {
 	s, tempDir := setupTestServer(t)
 	defer os.RemoveAll(tempDir)
@@ -198,6 +201,7 @@ func TestReadDataFromFile(t *testing.T) {
 	}
 }
 
+// TestServerIntegration tests the complete HTTP server functionality.
 func TestServerIntegration(t *testing.T) {
 	s, tempDir := setupTestServer(t)
 	defer os.RemoveAll(tempDir)
@@ -222,7 +226,7 @@ func TestServerIntegration(t *testing.T) {
 	}
 	defer ln.Close()
 
-	// Start server in a goroutine
+	// Accept connections from a goroutine
 	go func() {
 		for {
 			conn, err := ln.Accept()
@@ -280,7 +284,7 @@ func TestServerIntegration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Connect to server
+			// Connect to the server
 			conn, err := net.Dial("tcp", "0.0.0.0:"+strconv.Itoa(port))
 			if err != nil {
 				t.Fatalf("Failed to connect to server: %v", err)
@@ -293,7 +297,7 @@ func TestServerIntegration(t *testing.T) {
 				t.Fatalf("Failed to send request: %v", err)
 			}
 
-			// Read response
+			// Read response header
 			conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 			reader := bufio.NewReader(conn)
 			header, err := reader.ReadString('\n')
@@ -306,10 +310,10 @@ func TestServerIntegration(t *testing.T) {
 				t.Errorf("Expected status %s in response, got: %s", tt.expectedStatus, header)
 			}
 
-			// Check body for successful requests
 			if tt.expectedBody != "" {
 				// Throw away first empty line
 				_, _ = reader.ReadString('\n')
+				// Read reponse body
 				body, err := reader.ReadString('\n')
 				if err != nil {
 					t.Fatalf("Failed to read response body: %v", err)
@@ -319,5 +323,79 @@ func TestServerIntegration(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestSendSuccessResponse tests sending HTTP 200 OK responses.
+func TestSendSuccessResponse(t *testing.T) {
+	s, tempDir := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Create a mock connection using pipe
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	defer clientConn.Close()
+
+	testData := []byte("Test response data")
+
+	// Send response from a goroutine
+	go func() {
+		s.sendSuccessResponse(serverConn, testData)
+		serverConn.Close()
+	}()
+
+	// Read response header
+	reader := bufio.NewReader(clientConn)
+	header, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("Failed to read response header: %v", err)
+	}
+
+	expectedHeader := "HTTP/1.1 200 OK"
+	if !strings.Contains(header, expectedHeader) {
+		t.Errorf("Expected response to contain %s, got: %s", expectedHeader, header)
+	}
+
+	// Throw away first empty line
+	_, _ = reader.ReadString('\n')
+	
+	// Read response body
+	body, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("Failed to read response header: %v", err)
+	}
+	if !strings.Contains(body, string(testData)) {
+		t.Errorf("Expected response body to contain %s, got: %s", string(testData), body)
+	}
+}
+
+// TestSendErrorResponse tests sending HTTP error responses.
+func TestSendErrorResponse(t *testing.T) {
+	server, tempDir := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Create a mock connection using pipe
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	defer clientConn.Close()
+
+	testStatus := "404 Not Found"
+
+	// Send response from a goroutine
+	go func() {
+		server.sendErrorResponse(serverConn, testStatus)
+		serverConn.Close()
+	}()
+
+	// Read response
+	reader := bufio.NewReader(clientConn)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("Failed to read response: %v", err)
+	}
+
+	expectedResponse := "HTTP/1.1 " + testStatus
+	if !strings.Contains(response, expectedResponse) {
+		t.Errorf("Expected response to contain %s, got: %s", expectedResponse, response)
 	}
 }
