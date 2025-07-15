@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+const gocker = "../../../bin/gocker"
+
 // TestCommandExecution tests that commands run and return correct output
 func TestCommandExecution(t *testing.T) {
 	if os.Geteuid() != 0 {
@@ -44,7 +46,7 @@ func TestCommandExecution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := exec.Command("../../../gocker", tt.args...)
+			cmd := exec.Command(gocker, tt.args...)
 			output, err := cmd.CombinedOutput()
 
 			if tt.expectedError {
@@ -97,7 +99,7 @@ func TestExitCodes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Needs a compiled binary for proper error propagation
-			cmd := exec.Command("../../../gocker", tt.args...)
+			cmd := exec.Command(gocker, tt.args...)
 			err := cmd.Run()
 
 			var exitCode int
@@ -130,7 +132,7 @@ func TestNamespaceIsolation(t *testing.T) {
 	}
 
 	// Test that container has different hostname
-	cmd := exec.Command("../../../gocker", "run", "alpine", "hostname")
+	cmd := exec.Command(gocker, "run", "alpine", "hostname")
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("Failed to run container: %v", err)
@@ -166,7 +168,7 @@ func TestFileSystemIsolation(t *testing.T) {
 	defer os.Remove(hostTestFile)
 
 	// Try to access the host file from within the container
-	cmd := exec.Command("../../../gocker", "run", "alpine", "/bin/busybox", "cat", hostTestFile)
+	cmd := exec.Command(gocker, "run", "alpine", "/bin/busybox", "cat", hostTestFile)
 
 	// The command should fail because the file shouldn't be accessible
 	output, err := cmd.CombinedOutput()
@@ -187,7 +189,7 @@ func TestContainerRootFileSystem(t *testing.T) {
 	}
 
 	// List root directory contents
-	cmd := exec.Command("../../../gocker", "run", "alpine", "/bin/busybox", "ls", "/")
+	cmd := exec.Command(gocker, "run", "alpine", "/bin/busybox", "ls", "/")
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("Failed to list container root directory: %v", err)
@@ -228,7 +230,7 @@ func TestChrootPreventsEscape(t *testing.T) {
 		pwd
 	`
 
-	cmd := exec.Command("../../../gocker", "run", "alpine", "/bin/busybox", "sh", "-c", script)
+	cmd := exec.Command(gocker, "run", "alpine", "/bin/busybox", "sh", "-c", script)
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("Failed to run chroot escape test: %v", err)
@@ -255,7 +257,7 @@ func TestFilesystemWriteIsolation(t *testing.T) {
 	containerTestFile := "/tmp/container_test_file"
 
 	// Create a test file in the container
-	cmd := exec.Command("../../../gocker", "run", "alpine", "/bin/busybox", "sh", "-c",
+	cmd := exec.Command(gocker, "run", "alpine", "/bin/busybox", "sh", "-c",
 		fmt.Sprintf("touch %s", containerTestFile))
 
 	if err := cmd.Run(); err != nil {
@@ -264,7 +266,7 @@ func TestFilesystemWriteIsolation(t *testing.T) {
 
 	// Write to the test file
 	testContent := "container test content"
-	cmd = exec.Command("../../../gocker", "run", "alpine", "/bin/busybox", "sh", "-c",
+	cmd = exec.Command(gocker, "run", "alpine", "/bin/busybox", "sh", "-c",
 		fmt.Sprintf("echo '%s' > %s", testContent, containerTestFile))
 
 	if err := cmd.Run(); err != nil {
@@ -272,7 +274,7 @@ func TestFilesystemWriteIsolation(t *testing.T) {
 	}
 
 	// Verify the file exists in the container
-	cmd = exec.Command("../../../gocker", "run", "alpine", "/bin/busybox", "cat", containerTestFile)
+	cmd = exec.Command(gocker, "run", "alpine", "/bin/busybox", "cat", containerTestFile)
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("Failed to read file from container: %v", err)
@@ -294,7 +296,7 @@ func TestProcessesIsolation(t *testing.T) {
 		t.Skip("Skipping processes isolation test: requires root privileges")
 	}
 
-	cmd := exec.Command("../../../gocker", "run", "alpine", "ps", "axf")
+	cmd := exec.Command(gocker, "run", "alpine", "ps", "axf")
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -346,7 +348,7 @@ func TestUserNamespaceIsolation(t *testing.T) {
 	t.Logf("Host user: %s (UID: %d, GID: %d)", currentUser.Username, hostUID, hostGID)
 
 	// Start a long-running process in the container
-	cmd := exec.Command("../../../gocker", "run", "alpine", "sleep", "30")
+	cmd := exec.Command(gocker, "run", "alpine", "sleep", "30")
 
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("Failed to start container: %v", err)
@@ -425,7 +427,7 @@ func TestUserNamespaceIsolation(t *testing.T) {
 }
 
 func TestMemoryLimit(t *testing.T) {
-	cmd := exec.Command("../../../gocker", "run", "alpine", "sh", "-c", "dd if=/dev/zero of=/dev/null bs=1M count=1000")
+	cmd := exec.Command(gocker, "run", "alpine", "sh", "-c", "dd if=/dev/zero of=/dev/null bs=1M count=1000")
 	err := cmd.Run()
 	if err == nil {
 		t.Error("Expected memory limit to kill the process, but it ran successfully")
@@ -435,7 +437,7 @@ func TestMemoryLimit(t *testing.T) {
 func TestCPULimit(t *testing.T) {
 	start := time.Now()
 
-	cmd := exec.Command("../../../gocker", "run", "alpine", "sh", "-c", `
+	cmd := exec.Command(gocker, "run", "alpine", "sh", "-c", `
 		i=0; while [ $i -lt 100000 ]; do :; i=$((i+1)); done
 	`)
 	err := cmd.Run()
