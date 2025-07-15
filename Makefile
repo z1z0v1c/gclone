@@ -1,5 +1,5 @@
 # CLI tools
-TOOLS := gocker ginx
+TOOLS := gocker ginx gurl
 
 .PHONY: all build test clean
 
