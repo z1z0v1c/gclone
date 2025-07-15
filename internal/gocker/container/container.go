@@ -194,7 +194,7 @@ func (c *Container) fromFile(cfgPath string) error {
 	}
 	defer cfgFile.Close()
 
-	var cfg registry.ImageConfig
+	var cfg struct{ Config registry.Config }
 	if err = json.NewDecoder(cfgFile).Decode(&cfg); err != nil {
 		return fmt.Errorf("failed to decode config file: %v", err)
 	}
