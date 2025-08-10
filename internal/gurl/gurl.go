@@ -48,8 +48,6 @@ func Gurl(c *cobra.Command, args []string) {
 	req += "Connection: close\r\n"
 	req += "\r\n"
 
-	fmt.Printf("Sending request %s", req)
-
 	_, err = conn.Write([]byte(req))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error sending request: %v\n", err)
@@ -57,11 +55,19 @@ func Gurl(c *cobra.Command, args []string) {
 	}
 
 	reader := bufio.NewReader(conn)
+	inBody := false
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			break
 		}
-		fmt.Print(line)
+
+		if inBody {
+			fmt.Print(line)
+		}
+
+		if line == "\r\n" {
+			inBody = true
+		}
 	}
 }
