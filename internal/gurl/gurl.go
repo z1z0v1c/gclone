@@ -69,8 +69,13 @@ func (g *Gurl) Start() {
 		fmt.Sprintf("Host: %s\r\n", g.host),
 		"Accept: */*\r\n",
 		"Connection: close\r\n",
-		"\r\n",
 	}
+
+	if g.data != "" {
+		reqLines = append(reqLines, fmt.Sprintf("Content-Length: %d\r\n", len(g.data)))
+	}
+
+	reqLines = append(reqLines, "\r\n")
 
 	_, err = conn.Write([]byte(strings.Join(reqLines, "") + g.data))
 	if err != nil {
