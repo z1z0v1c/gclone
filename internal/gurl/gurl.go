@@ -16,9 +16,10 @@ type Gurl struct {
 	path     string
 
 	verbose bool
+	method  string
 }
 
-func NewGurl(urls string, verbose bool) *Gurl {
+func NewGurl(urls string, verbose bool, method string) *Gurl {
 	url, err := url.Parse(urls)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid url: %v.\n", err)
@@ -48,6 +49,7 @@ func NewGurl(urls string, verbose bool) *Gurl {
 		port:     port,
 		path:     path,
 		verbose:  verbose,
+		method:   method,
 	}
 }
 
@@ -61,7 +63,7 @@ func (g *Gurl) Start() {
 	defer conn.Close()
 
 	reqLines := []string{
-		fmt.Sprintf("GET %s HTTP/1.1\r\n", g.path),
+		fmt.Sprintf("%s %s HTTP/1.1\r\n", g.method, g.path),
 		fmt.Sprintf("Host: %s\r\n", g.host),
 		"Accept: */*\r\n",
 		"Connection: close\r\n",

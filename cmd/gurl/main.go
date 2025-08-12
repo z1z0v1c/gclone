@@ -8,7 +8,10 @@ import (
 	g "github.com/z1z0v1c/gclone/internal/gurl"
 )
 
-var verbose bool
+var (
+	verbose bool
+	method  string
+)
 
 // gurl is the root Cobra command for gURL
 var gurl = &cobra.Command{
@@ -19,11 +22,12 @@ var gurl = &cobra.Command{
 }
 
 func init() {
-	gurl.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Verbose mode")
+	gurl.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Make the operation more talkative")
+	gurl.PersistentFlags().StringVarP(&method, "request", "X", "GET", "Change the method to use when starting the transfer")
 }
 
 func start(c *cobra.Command, args []string) {
-	g.NewGurl(args[0], verbose).Start()
+	g.NewGurl(args[0], verbose, method).Start()
 }
 
 func main() {
