@@ -17,9 +17,10 @@ type Gurl struct {
 
 	verbose bool
 	method  string
+	data    string
 }
 
-func NewGurl(urls string, verbose bool, method string) *Gurl {
+func NewGurl(urls string, verbose bool, method, data string) *Gurl {
 	url, err := url.Parse(urls)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid url: %v.\n", err)
@@ -50,6 +51,7 @@ func NewGurl(urls string, verbose bool, method string) *Gurl {
 		path:     path,
 		verbose:  verbose,
 		method:   method,
+		data:     data,
 	}
 }
 
@@ -70,7 +72,7 @@ func (g *Gurl) Start() {
 		"\r\n",
 	}
 
-	_, err = conn.Write([]byte(strings.Join(reqLines, "")))
+	_, err = conn.Write([]byte(strings.Join(reqLines, "") + g.data))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error sending request: %v\n", err)
 		os.Exit(1)

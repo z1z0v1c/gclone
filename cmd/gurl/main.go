@@ -11,6 +11,7 @@ import (
 var (
 	verbose bool
 	method  string
+	data    string
 )
 
 // gurl is the root Cobra command for gURL
@@ -24,10 +25,11 @@ var gurl = &cobra.Command{
 func init() {
 	gurl.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Make the operation more talkative")
 	gurl.PersistentFlags().StringVarP(&method, "request", "X", "GET", "Change the method to use when starting the transfer")
+	gurl.PersistentFlags().StringVarP(&data, "data", "d", "", "Sends the specified data in a POST request to the HTTP server")
 }
 
 func start(c *cobra.Command, args []string) {
-	g.NewGurl(args[0], verbose, method).Start()
+	g.NewGurl(args[0], verbose, method, data).Start()
 }
 
 func main() {
