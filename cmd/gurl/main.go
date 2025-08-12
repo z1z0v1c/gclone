@@ -13,7 +13,11 @@ var root = &cobra.Command{
 	Use:   "gurl command [flags]",
 	Short: "Simple cURL clone",
 	Args:  cobra.ExactArgs(1),
-	Run:   gurl.Gurl,
+	Run:   start,
+}
+
+func start(c *cobra.Command, args []string) {
+	gurl.NewGurl(args[0]).Start()
 }
 
 func main() {

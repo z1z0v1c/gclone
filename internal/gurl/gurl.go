@@ -6,12 +6,18 @@ import (
 	"net"
 	"net/url"
 	"os"
-
-	"github.com/spf13/cobra"
 )
 
-func Gurl(c *cobra.Command, args []string) {
-	url, err := url.Parse(args[0])
+type Gurl struct {
+	url string
+}
+
+func NewGurl(url string) *Gurl {
+	return &Gurl{url: url}
+}
+
+func (g *Gurl) Start() {
+	url, err := url.Parse(g.url)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid url: %v.\n", err)
 		os.Exit(1)
