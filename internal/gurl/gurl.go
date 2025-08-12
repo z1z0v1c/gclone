@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strings"
 )
 
 type Gurl struct {
@@ -13,9 +14,11 @@ type Gurl struct {
 	host     string
 	port     string
 	path     string
+
+	verbose bool
 }
 
-func NewGurl(urls string) *Gurl {
+func NewGurl(urls string, verbose bool) *Gurl {
 	url, err := url.Parse(urls)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid url: %v.\n", err)
@@ -41,9 +44,10 @@ func NewGurl(urls string) *Gurl {
 
 	return &Gurl{
 		protocol: protocol,
-		host: host,
-		port: port,
-		path: path,
+		host:     host,
+		port:     port,
+		path:     path,
+		verbose:  verbose,
 	}
 }
 
@@ -56,16 +60,24 @@ func (g *Gurl) Start() {
 	}
 	defer conn.Close()
 
-	req := fmt.Sprintf("GET %s HTTP/1.1\r\n", g.path)
-	req += fmt.Sprintf("Host: %s\r\n", g.host)
-	req += "Accept: */*\r\n"
-	req += "Connection: close\r\n"
-	req += "\r\n"
+	reqLines := []string{
+		fmt.Sprintf("GET %s HTTP/1.1\r\n", g.path),
+		fmt.Sprintf("Host: %s\r\n", g.host),
+		"Accept: */*\r\n",
+		"Connection: close\r\n",
+		"\r\n",
+	}
 
-	_, err = conn.Write([]byte(req))
+	_, err = conn.Write([]byte(strings.Join(reqLines, "")))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error sending request: %v\n", err)
 		os.Exit(1)
+	}
+
+	if g.verbose {
+		for _, line := range reqLines {
+			fmt.Printf("> %s", line)
+		}
 	}
 
 	reader := bufio.NewReader(conn)
@@ -74,6 +86,10 @@ func (g *Gurl) Start() {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			break
+		}
+
+		if g.verbose && !inBody {
+			fmt.Printf("< %s", line)
 		}
 
 		if inBody {
