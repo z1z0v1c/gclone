@@ -9,15 +9,14 @@ import (
 )
 
 type Gurl struct {
-	url string
+	protocol string
+	host     string
+	port     string
+	path     string
 }
 
-func NewGurl(url string) *Gurl {
-	return &Gurl{url: url}
-}
-
-func (g *Gurl) Start() {
-	url, err := url.Parse(g.url)
+func NewGurl(urls string) *Gurl {
+	url, err := url.Parse(urls)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid url: %v.\n", err)
 		os.Exit(1)
@@ -40,7 +39,16 @@ func (g *Gurl) Start() {
 		path = "/"
 	}
 
-	addr := net.JoinHostPort(host, port)
+	return &Gurl{
+		protocol: protocol,
+		host: host,
+		port: port,
+		path: path,
+	}
+}
+
+func (g *Gurl) Start() {
+	addr := net.JoinHostPort(g.host, g.port)
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error connecting to server: %v\n", err)
@@ -48,8 +56,8 @@ func (g *Gurl) Start() {
 	}
 	defer conn.Close()
 
-	req := fmt.Sprintf("GET %s HTTP/1.1\r\n", path)
-	req += fmt.Sprintf("Host: %s\r\n", host)
+	req := fmt.Sprintf("GET %s HTTP/1.1\r\n", g.path)
+	req += fmt.Sprintf("Host: %s\r\n", g.host)
 	req += "Accept: */*\r\n"
 	req += "Connection: close\r\n"
 	req += "\r\n"
