@@ -20,7 +20,7 @@ var gurl = &cobra.Command{
 	Use:   "gurl command [flags]",
 	Short: "Simple cURL clone",
 	Args:  cobra.ExactArgs(1),
-	Run:   start,
+	Run:   run,
 }
 
 func init() {
@@ -30,13 +30,20 @@ func init() {
 	gurl.PersistentFlags().StringVarP(&header, "header", "H", "", "Extra header to include in information sent")
 }
 
-func start(c *cobra.Command, args []string) {
-	g.NewGurl(args[0], verbose, method, data, header).Start()
+func run(c *cobra.Command, args []string) {
+	g, err := g.NewGurl(args[0], verbose, method, data, header)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+		os.Exit(1)
+	}
+
+	err = g.Start()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func main() {
-	if err := gurl.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
+	gurl.Execute()
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"strings"
 )
 
@@ -15,23 +14,22 @@ type Gurl struct {
 	port     string
 	path     string
 
+	// Flags
 	verbose bool
 	method  string
 	data    string
 	header  string
 }
 
-func NewGurl(urls string, verbose bool, method, data, header string) *Gurl {
+func NewGurl(urls string, verbose bool, method, data, header string) (*Gurl, error) {
 	url, err := url.Parse(urls)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Invalid url: %v.\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("invalid url: %v", err)
 	}
 
 	protocol := url.Scheme
 	if protocol != "http" {
-		fmt.Fprintf(os.Stderr, "Invalid protocol. Only http is supported.\n")
-		os.Exit(1)
+		return nil, fmt.Errorf("invalid protocol (only HTTP is supported)")
 	}
 
 	host := url.Hostname()
@@ -53,16 +51,15 @@ func NewGurl(urls string, verbose bool, method, data, header string) *Gurl {
 		verbose:  verbose,
 		method:   method,
 		data:     data,
-		header: header,
-	}
+		header:   header,
+	}, nil
 }
 
-func (g *Gurl) Start() {
+func (g *Gurl) Start() error {
 	addr := net.JoinHostPort(g.host, g.port)
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error connecting to server: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to connect to the server: %v", err)
 	}
 	defer conn.Close()
 
@@ -85,8 +82,7 @@ func (g *Gurl) Start() {
 
 	_, err = conn.Write([]byte(strings.Join(reqLines, "") + g.data))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error sending request: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to send request: %v", err)
 	}
 
 	if g.verbose {
@@ -115,4 +111,6 @@ func (g *Gurl) Start() {
 			inBody = true
 		}
 	}
+
+	return nil
 }
