@@ -18,9 +18,10 @@ type Gurl struct {
 	verbose bool
 	method  string
 	data    string
+	header  string
 }
 
-func NewGurl(urls string, verbose bool, method, data string) *Gurl {
+func NewGurl(urls string, verbose bool, method, data, header string) *Gurl {
 	url, err := url.Parse(urls)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid url: %v.\n", err)
@@ -52,6 +53,7 @@ func NewGurl(urls string, verbose bool, method, data string) *Gurl {
 		verbose:  verbose,
 		method:   method,
 		data:     data,
+		header: header,
 	}
 }
 
@@ -69,6 +71,10 @@ func (g *Gurl) Start() {
 		fmt.Sprintf("Host: %s\r\n", g.host),
 		"Accept: */*\r\n",
 		"Connection: close\r\n",
+	}
+
+	if g.header != "" {
+		reqLines = append(reqLines, fmt.Sprintf("%s\r\n", g.header))
 	}
 
 	if g.data != "" {
