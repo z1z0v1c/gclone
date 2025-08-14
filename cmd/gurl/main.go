@@ -37,7 +37,7 @@ func run(c *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	err = g.Start()
+	err = g.Run()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
 		os.Exit(1)

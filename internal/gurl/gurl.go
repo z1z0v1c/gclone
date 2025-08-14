@@ -55,7 +55,7 @@ func NewGurl(urls string, verbose bool, method, data, header string) (*Gurl, err
 	}, nil
 }
 
-func (g *Gurl) Start() error {
+func (g *Gurl) Run() error {
 	addr := net.JoinHostPort(g.host, g.port)
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
