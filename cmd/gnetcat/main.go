@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -9,7 +10,7 @@ import (
 
 var (
 	listen bool
-	port   int
+	port   int16
 )
 
 // gnc is the root Cobra command for the Gnetcat utility
@@ -20,7 +21,7 @@ var gnc = &cobra.Command{
 
 func init() {
 	gnc.PersistentFlags().BoolVarP(&listen, "listen", "l", false, "Bind and listen for incoming connections")
-	gnc.PersistentFlags().IntVarP(&port, "port", "p", 8888, "Port to listen on or connect to")
+	gnc.PersistentFlags().Int16VarP(&port, "port", "p", 8888, "Specify source port to use")
 }
 
 func main() {
@@ -30,6 +31,12 @@ func main() {
 	}
 
 	if listen {
+		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err != nil {
+			panic(err)
+		}
+		defer listener.Close()
+
 		fmt.Println("Listening on port", port)
 	}
 }
