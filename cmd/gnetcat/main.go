@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"os"
 
@@ -37,6 +38,12 @@ func main() {
 		}
 		defer listener.Close()
 
-		fmt.Println("Listening on port", port)
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println("Accept error:", err)
+		}
+		defer conn.Close()
+
+		_, _ = io.Copy(os.Stdout, conn)
 	}
 }
