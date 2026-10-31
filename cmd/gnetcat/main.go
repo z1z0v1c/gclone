@@ -2,11 +2,10 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"net"
 	"os"
 
 	"github.com/spf13/cobra"
+	g "github.com/z1z0v1c/gclone/internal/gnetcat"
 )
 
 var (
@@ -18,6 +17,7 @@ var (
 var gnc = &cobra.Command{
 	Use:   "gnc command [flags]",
 	Short: "Simple Netcat clone written in Go",
+	Run:   run,
 }
 
 func init() {
@@ -25,25 +25,19 @@ func init() {
 	gnc.PersistentFlags().Int16VarP(&port, "port", "p", 8888, "Specify source port to use")
 }
 
-func main() {
-	if err := gnc.Execute(); err != nil {
+func run(c *cobra.Command, args []string) {
+	g, err := g.NewGnetcat(listen, port)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v", err)
 		os.Exit(1)
 	}
-
-	if listen {
-		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-		if err != nil {
-			panic(err)
-		}
-		defer listener.Close()
-
-		conn, err := listener.Accept()
-		if err != nil {
-			fmt.Println("Accept error:", err)
-		}
-		defer conn.Close()
-
-		_, _ = io.Copy(os.Stdout, conn)
+	err = g.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v", err)
+		os.Exit(1)
 	}
+}
+
+func main() {
+	gnc.Execute()
 }
