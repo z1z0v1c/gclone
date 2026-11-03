@@ -10,7 +10,7 @@ import (
 
 var (
 	listen bool
-	port   int16
+	port   uint16
 )
 
 // gnc is the root Cobra command for the Gnetcat utility
@@ -22,7 +22,7 @@ var gnc = &cobra.Command{
 
 func init() {
 	gnc.PersistentFlags().BoolVarP(&listen, "listen", "l", false, "Bind and listen for incoming connections")
-	gnc.PersistentFlags().Int16VarP(&port, "port", "p", 8888, "Specify source port to use")
+	gnc.PersistentFlags().Uint16VarP(&port, "port", "p", 8888, "Specify source port to use")
 }
 
 func run(c *cobra.Command, args []string) {

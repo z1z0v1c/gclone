@@ -10,10 +10,10 @@ import (
 type Gnetcat struct {
 	// Flags
 	listen bool
-	port   int16
+	port   uint16
 }
 
-func NewGnetcat(listen bool, port int16) (*Gnetcat, error) {
+func NewGnetcat(listen bool, port uint16) (*Gnetcat, error) {
 	return &Gnetcat{
 		listen: listen,
 		port:   port,
