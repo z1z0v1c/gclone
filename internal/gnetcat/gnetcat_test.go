@@ -10,42 +10,48 @@ func TestNewGnetcat(t *testing.T) {
 		listen   bool
 		port     uint16
 		protocol string
+		zeroio   bool
 	}{
 		{
 			name:     "listening enabled",
 			listen:   true,
 			port:     8080,
 			protocol: "tcp",
+			zeroio:   false,
 		},
 		{
 			name:     "listening disabled",
 			listen:   false,
 			port:     8080,
 			protocol: "tcp",
+			zeroio:   false,
 		},
 		{
 			name:     "port zero",
 			listen:   false,
 			port:     0,
 			protocol: "tcp",
+			zeroio:   false,
 		},
 		{
 			name:     "maximum uint16 port",
 			listen:   true,
 			port:     65535,
 			protocol: "tcp",
+			zeroio:   false,
 		},
 		{
 			name:     "UDP protocol",
 			listen:   true,
 			port:     8080,
 			protocol: "udp",
+			zeroio:   false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewGnetcat(tt.listen, tt.port, tt.protocol)
+			got, err := NewGnetcat(tt.listen, tt.port, tt.protocol, tt.zeroio)
 
 			if err != nil {
 				t.Fatalf("NewGnetcat() returned unexpected error: %v", err)
@@ -65,6 +71,10 @@ func TestNewGnetcat(t *testing.T) {
 
 			if got.protocol != tt.protocol {
 				t.Errorf("protocol = %s, want %s", got.protocol, tt.protocol)
+			}
+
+			if got.zeroio != tt.zeroio {
+				t.Errorf("zeroio = %v, want %v", got.zeroio, tt.zeroio)
 			}
 		})
 	}

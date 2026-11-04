@@ -12,13 +12,15 @@ type Gnetcat struct {
 	listen   bool
 	port     uint16
 	protocol string
+	zeroio   bool
 }
 
-func NewGnetcat(listen bool, port uint16, protocol string) (*Gnetcat, error) {
+func NewGnetcat(listen bool, port uint16, protocol string, zeroio bool) (*Gnetcat, error) {
 	return &Gnetcat{
 		listen:   listen,
 		port:     port,
 		protocol: protocol,
+		zeroio:   zeroio,
 	}, nil
 }
 
