@@ -79,3 +79,21 @@ func TestNewGnetcat(t *testing.T) {
 		})
 	}
 }
+
+func TestListenUnsupportedProtocol(t *testing.T) {
+    g := &Gnetcat{
+        protocol: "icmp",
+        port:     8888,
+    }
+
+    err := g.Listen()
+
+    if err == nil {
+        t.Fatal("expected error for unsupported protocol")
+    }
+
+    want := "unsupported protocol: icmp"
+    if err.Error() != want {
+        t.Errorf("got %q, want %q", err.Error(), want)
+    }
+}
