@@ -1,6 +1,9 @@
 package gnetcat
 
 import (
+	"bytes"
+	"io"
+	"net"
 	"testing"
 )
 
@@ -81,19 +84,61 @@ func TestNewGnetcat(t *testing.T) {
 }
 
 func TestListenUnsupportedProtocol(t *testing.T) {
-    g := &Gnetcat{
-        protocol: "icmp",
-        port:     8888,
-    }
+	g := &Gnetcat{
+		protocol: "icmp",
+		port:     8888,
+	}
 
-    err := g.Listen()
+	err := g.Listen()
 
-    if err == nil {
-        t.Fatal("expected error for unsupported protocol")
-    }
+	if err == nil {
+		t.Fatal("expected error for unsupported protocol")
+	}
 
-    want := "unsupported protocol: icmp"
-    if err.Error() != want {
-        t.Errorf("got %q, want %q", err.Error(), want)
-    }
+	want := "unsupported protocol: icmp"
+	if err.Error() != want {
+		t.Errorf("got %q, want %q", err.Error(), want)
+	}
+}
+func TestServeTCP(t *testing.T) {
+	g, err := NewGnetcat(true, 8888, "tcp", false)
+	if err != nil {
+		t.Fatalf("NewGnetcat() returned unexpected error: %v", err)
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+
+	var output bytes.Buffer
+
+	done := make(chan error, 1)
+
+	go func() {
+		done <- g.serveTCP(listener, &output)
+	}()
+
+	conn, err := net.Dial("tcp", listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	message := "Hello from TCP client!"
+
+	_, err = io.WriteString(conn, message)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conn.Close()
+
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+
+	if got := output.String(); got != message {
+		t.Errorf("got %q, want %q", got, message)
+	}
 }

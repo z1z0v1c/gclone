@@ -50,15 +50,19 @@ func (g *Gnetcat) ListenTCP() error {
 	}
 	defer listener.Close()
 
+	return g.serveTCP(listener, os.Stdout)
+}
+
+func (g *Gnetcat) serveTCP(listener net.Listener, output io.Writer) error {
 	conn, err := listener.Accept()
 	if err != nil {
-		return fmt.Errorf("Accept error: %v", err)
+		return fmt.Errorf("accept error: %w", err)
 	}
 	defer conn.Close()
 
-	_, _ = io.Copy(os.Stdout, conn)
+	_, err = io.Copy(output, conn)
 
-	return nil
+	return err
 }
 
 func (g *Gnetcat) ListenUDP() error {
@@ -73,16 +77,20 @@ func (g *Gnetcat) ListenUDP() error {
 	}
 	defer conn.Close()
 
-	buf := make([]byte, 4096)
+	return g.serveUDP(conn, os.Stdout)
+}
 
-	for {
-		n, _, err := conn.ReadFromUDP(buf)
-		if err != nil {
-			return err
-		}
+func (g *Gnetcat) serveUDP(conn *net.UDPConn, output io.Writer) error {
+    buf := make([]byte, 4096)
 
-		if _, err := os.Stdout.Write(buf[:n]); err != nil {
-			return err
-		}
-	}
+    for {
+        n, _, err := conn.ReadFromUDP(buf)
+        if err != nil {
+            return err
+        }
+
+        if _, err := output.Write(buf[:n]); err != nil {
+            return err
+        }
+    }
 }
