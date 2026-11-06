@@ -35,37 +35,45 @@ func (g *Gnetcat) Run() error {
 func (g *Gnetcat) Listen() error {
 	switch g.protocol {
 	case "tcp":
-		listener, err := net.Listen(g.protocol, fmt.Sprintf(":%d", g.port))
-		if err != nil {
-			return err
-		}
-		defer listener.Close()
-
-		conn, err := listener.Accept()
-		if err != nil {
-			fmt.Println("Accept error:", err)
-		}
-		defer conn.Close()
-
-		_, _ = io.Copy(os.Stdout, conn)
-
+		return g.ListenTCP()
 	case "udp":
-		addr := net.UDPAddr{
-			Port: int(g.port),
-			IP:   net.ParseIP("0.0.0.0"),
-		}
-
-		conn, err := net.ListenUDP(g.protocol, &addr)
-		if err != nil {
-			return err
-		}
-		defer conn.Close()
-
-		_, _ = io.Copy(os.Stdout, conn)
-
+		return g.ListenUDP()
 	default:
 		return fmt.Errorf("unsupported protocol: %s", g.protocol)
 	}
+}
+
+func (g *Gnetcat) ListenUDP() error {
+	addr := net.UDPAddr{
+		Port: int(g.port),
+		IP:   net.ParseIP("0.0.0.0"),
+	}
+
+	conn, err := net.ListenUDP(g.protocol, &addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, _ = io.Copy(os.Stdout, conn)
+
+	return nil
+}
+
+func (g *Gnetcat) ListenTCP() error {
+	listener, err := net.Listen(g.protocol, fmt.Sprintf(":%d", g.port))
+	if err != nil {
+		return err
+	}
+	defer listener.Close()
+
+	conn, err := listener.Accept()
+	if err != nil {
+		return fmt.Errorf("Accept error: %v", err)
+	}
+	defer conn.Close()
+
+	_, _ = io.Copy(os.Stdout, conn)
 
 	return nil
 }
