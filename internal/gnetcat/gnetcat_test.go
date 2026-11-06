@@ -101,12 +101,12 @@ func TestListenUnsupportedProtocol(t *testing.T) {
 	}
 }
 func TestServeTCP(t *testing.T) {
-	g, err := NewGnetcat(true, 8888, "tcp", false)
+	g, err := NewGnetcat(true, 8080, "tcp", false)
 	if err != nil {
 		t.Fatalf("NewGnetcat() returned unexpected error: %v", err)
 	}
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := net.Listen("tcp", "127.0.0.1:8080")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,4 +141,53 @@ func TestServeTCP(t *testing.T) {
 	if got := output.String(); got != message {
 		t.Errorf("got %q, want %q", got, message)
 	}
+}
+
+func TestServeUDP(t *testing.T) {
+	g, err := NewGnetcat(true, 8080, "udp", false)
+	if err != nil {
+		t.Fatalf("NewGnetcat() returned unexpected error: %v", err)
+	}
+	
+    addr := &net.UDPAddr{
+        IP:   net.ParseIP("127.0.0.1"),
+        Port: 8080,
+    }
+
+    listener, err := net.ListenUDP("udp", addr)
+    if err != nil {
+        t.Fatal(err)
+    }
+
+    var output bytes.Buffer
+
+    done := make(chan error, 1)
+
+    go func() {
+        done <- g.serveUDP(listener, &output)
+    }()
+
+    client, err := net.DialUDP("udp", nil, listener.LocalAddr().(*net.UDPAddr))
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer client.Close()
+
+    message := "Hello from UDP client!"
+
+    _, err = client.Write([]byte(message))
+    if err != nil {
+        t.Fatal(err)
+    }
+
+    // Closing the listener interrupts ReadFromUDP.
+    listener.Close()
+
+    if err := <-done; err == nil {
+        t.Fatal("expected error after closing UDP listener")
+    }
+
+    if got := output.String(); got != message {
+        t.Errorf("got %q, want %q", got, message)
+    }
 }
