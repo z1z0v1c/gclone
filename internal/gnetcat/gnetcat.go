@@ -43,23 +43,6 @@ func (g *Gnetcat) Listen() error {
 	}
 }
 
-func (g *Gnetcat) ListenUDP() error {
-	addr := net.UDPAddr{
-		Port: int(g.port),
-		IP:   net.ParseIP("0.0.0.0"),
-	}
-
-	conn, err := net.ListenUDP(g.protocol, &addr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	_, _ = io.Copy(os.Stdout, conn)
-
-	return nil
-}
-
 func (g *Gnetcat) ListenTCP() error {
 	listener, err := net.Listen(g.protocol, fmt.Sprintf(":%d", g.port))
 	if err != nil {
@@ -76,4 +59,30 @@ func (g *Gnetcat) ListenTCP() error {
 	_, _ = io.Copy(os.Stdout, conn)
 
 	return nil
+}
+
+func (g *Gnetcat) ListenUDP() error {
+	addr := net.UDPAddr{
+		Port: int(g.port),
+		IP:   net.ParseIP("0.0.0.0"),
+	}
+
+	conn, err := net.ListenUDP(g.protocol, &addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	buf := make([]byte, 4096)
+
+	for {
+		n, _, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			return err
+		}
+
+		if _, err := os.Stdout.Write(buf[:n]); err != nil {
+			return err
+		}
+	}
 }
