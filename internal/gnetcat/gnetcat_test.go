@@ -11,6 +11,7 @@ func TestNewGnetcat(t *testing.T) {
 	tests := []struct {
 		name     string
 		listen   bool
+		host     string
 		port     uint16
 		protocol string
 		zeroio   bool
@@ -18,6 +19,7 @@ func TestNewGnetcat(t *testing.T) {
 		{
 			name:     "listening enabled",
 			listen:   true,
+			host:     "localhost",
 			port:     8080,
 			protocol: "tcp",
 			zeroio:   false,
@@ -25,6 +27,7 @@ func TestNewGnetcat(t *testing.T) {
 		{
 			name:     "listening disabled",
 			listen:   false,
+			host:     "localhost",
 			port:     8080,
 			protocol: "tcp",
 			zeroio:   false,
@@ -32,6 +35,7 @@ func TestNewGnetcat(t *testing.T) {
 		{
 			name:     "port zero",
 			listen:   false,
+			host:     "localhost",
 			port:     0,
 			protocol: "tcp",
 			zeroio:   false,
@@ -39,6 +43,7 @@ func TestNewGnetcat(t *testing.T) {
 		{
 			name:     "maximum uint16 port",
 			listen:   true,
+			host:     "localhost",
 			port:     65535,
 			protocol: "tcp",
 			zeroio:   false,
@@ -46,6 +51,7 @@ func TestNewGnetcat(t *testing.T) {
 		{
 			name:     "UDP protocol",
 			listen:   true,
+			host:     "localhost",
 			port:     8080,
 			protocol: "udp",
 			zeroio:   false,
@@ -54,7 +60,7 @@ func TestNewGnetcat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewGnetcat(tt.listen, tt.port, tt.protocol, tt.zeroio)
+			got, err := NewGnetcat(tt.listen, tt.host, tt.port, tt.protocol, tt.zeroio)
 
 			if err != nil {
 				t.Fatalf("NewGnetcat() returned unexpected error: %v", err)
@@ -100,8 +106,9 @@ func TestListenUnsupportedProtocol(t *testing.T) {
 		t.Errorf("got %q, want %q", err.Error(), want)
 	}
 }
+
 func TestServeTCP(t *testing.T) {
-	g, err := NewGnetcat(true, 8080, "tcp", false)
+	g, err := NewGnetcat(true, "127.0.0.1", 8080, "tcp", false)
 	if err != nil {
 		t.Fatalf("NewGnetcat() returned unexpected error: %v", err)
 	}
@@ -144,50 +151,50 @@ func TestServeTCP(t *testing.T) {
 }
 
 func TestServeUDP(t *testing.T) {
-	g, err := NewGnetcat(true, 8080, "udp", false)
+	g, err := NewGnetcat(true, "127.0.0.1", 8080, "udp", false)
 	if err != nil {
 		t.Fatalf("NewGnetcat() returned unexpected error: %v", err)
 	}
-	
-    addr := &net.UDPAddr{
-        IP:   net.ParseIP("127.0.0.1"),
-        Port: 8080,
-    }
 
-    listener, err := net.ListenUDP("udp", addr)
-    if err != nil {
-        t.Fatal(err)
-    }
+	addr := &net.UDPAddr{
+		IP:   net.ParseIP("127.0.0.1"),
+		Port: 8080,
+	}
 
-    var output bytes.Buffer
+	listener, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-    done := make(chan error, 1)
+	var output bytes.Buffer
 
-    go func() {
-        done <- g.serveUDP(listener, &output)
-    }()
+	done := make(chan error, 1)
 
-    client, err := net.DialUDP("udp", nil, listener.LocalAddr().(*net.UDPAddr))
-    if err != nil {
-        t.Fatal(err)
-    }
-    defer client.Close()
+	go func() {
+		done <- g.serveUDP(listener, &output)
+	}()
 
-    message := "Hello from UDP client!"
+	client, err := net.DialUDP("udp", nil, listener.LocalAddr().(*net.UDPAddr))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
 
-    _, err = client.Write([]byte(message))
-    if err != nil {
-        t.Fatal(err)
-    }
+	message := "Hello from UDP client!"
 
-    // Closing the listener interrupts ReadFromUDP.
-    listener.Close()
+	_, err = client.Write([]byte(message))
+	if err != nil {
+		t.Fatal(err)
+	}
 
-    if err := <-done; err == nil {
-        t.Fatal("expected error after closing UDP listener")
-    }
+	// Closing the listener interrupts ReadFromUDP.
+	listener.Close()
 
-    if got := output.String(); got != message {
-        t.Errorf("got %q, want %q", got, message)
-    }
+	if err := <-done; err == nil {
+		t.Fatal("expected error after closing UDP listener")
+	}
+
+	if got := output.String(); got != message {
+		t.Errorf("got %q, want %q", got, message)
+	}
 }

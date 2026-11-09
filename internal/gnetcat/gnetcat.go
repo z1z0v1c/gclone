@@ -5,19 +5,23 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
+	"time"
 )
 
 type Gnetcat struct {
 	// Flags
 	listen   bool
+	host     string
 	port     uint16
 	protocol string
 	zeroio   bool
 }
 
-func NewGnetcat(listen bool, port uint16, protocol string, zeroio bool) (*Gnetcat, error) {
+func NewGnetcat(listen bool, host string, port uint16, protocol string, zeroio bool) (*Gnetcat, error) {
 	return &Gnetcat{
 		listen:   listen,
+		host:     host,
 		port:     port,
 		protocol: protocol,
 		zeroio:   zeroio,
@@ -93,4 +97,15 @@ func (g *Gnetcat) serveUDP(conn *net.UDPConn, output io.Writer) error {
             return err
         }
     }
+}
+
+func (g *Gnetcat) ZeroIO() error {
+    address := net.JoinHostPort(g.host, strconv.Itoa(int(g.port)))
+
+    conn, err := net.DialTimeout(g.protocol, address, 5*time.Second)
+    if err != nil {
+        return err
+    }
+
+    return conn.Close()
 }
